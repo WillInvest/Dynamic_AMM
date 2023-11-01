@@ -1,6 +1,6 @@
 import numpy as np
 from solver import find_root_bisection
-
+import math
 from fee import NoFee
 from utils import add_dict
 
@@ -130,7 +130,6 @@ class AMM:
             self.portfolio[asset_to_track] / self.portfolio[reference_asset])
         self.BfA.append(
             self.portfolio[reference_asset] / self.portfolio[asset_to_track])
-
 # new_amount = self.percent_fee(
 #                         delta_assets, self.fees, asset_in, 0.01)
 #                     self.portfolio[asset_in] += new_amount
@@ -295,7 +294,25 @@ class AMM:
         
         return success1 and success2, info
         
-        
+    # def detect_arbitrage(self, market_price):
+    # # Assuming amm has asset pairs and tracks asset ratios
+    # # Calculate implied prices for different asset pairs
+    #     for i in range(len(self.AfB)):
+    #         # Calculate implied price for A in terms of B
+    #         implied_price_A_in_B = self.AfB[i] * market_price
+    #         # Calculate implied price for B in terms of A
+    #         implied_price_B_in_A = self.BfA[i] * (1 / market_price)
+
+    #         # Check if there's an arbitrage opportunity
+    #         if implied_price_A_in_B > round(1 / implied_price_B_in_A,2):
+    #             print(f"Arbitrage Opportunity Detected!")
+    #             print(f"Implied Price of A in terms of B: {implied_price_A_in_B}")
+    #             print(f"Implied Price of B in terms of A: {implied_price_B_in_A}")
+    #             print(f"Execute trades to take advantage of this opportunity")
+    #             # You can place the necessary trade logic here
+    #         else:
+    #             print("No Arbitrage Opportunity Detected.")
+
 
 
 # def parse_input(string: str):
@@ -332,5 +349,30 @@ class AMM:
 #                   "final_func_values": (func(a), func((a + b) / 2), func(b)),
 #                   'init_func_values': (func(init_a), func(init_b))}
 
+
+    ## Function to set ratios to market value
+    def set_market_trade(self, MP, inv1, inv2):
+        inventory_1 = self.portfolio[inv1]
+        
+        inventory_2 = self.portfolio[inv2]
+        
+        ratio = inventory_1 / inventory_2
+
+        if ratio > MP:
+            y = math.sqrt(inventory_1 * inventory_2/MP) - inventory_2
+            self.trade(inv1,inv2,y)
+            #print(f"This is your trade to execute: {inv2} {inv1} {y}")
+            
+        elif ratio < MP:
+            x = math.sqrt(MP * inventory_1 *inventory_2) - inventory_1
+            
+            self.trade(inv2,inv1,x)
+            #print(f"This is your trade to execute: {inv1} {inv2} {x}")
+
+    
+
+
+
+    
 
 
