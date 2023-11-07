@@ -1,10 +1,10 @@
 import numpy as np
 from solver import find_root_bisection
 import math
-from fee import NoFee
+from fee import NoFee, BaseFee
 from utils import add_dict
 
-from typing import Tuple, Dict, Callable
+from typing import Tuple, Dict, Callable, Literal
 
 
 # Define class AMM
@@ -17,11 +17,11 @@ class AMM:
     # Create a new AMM object
     # set the initial portfolio when creating the object
     def __init__(self, *, 
-                 initial_portfolio: dict = None, 
-                 initial_fee_portfolio: dict = None, 
+                 initial_portfolio: Dict[str, float] = None, 
+                 initial_fee_portfolio: Dict[str, float] = None, 
                  ratio_denomination: str = "None",
-                 fee_structure = None,
-                 solver = 'bisec') -> None:
+                 fee_structure: BaseFee = None,
+                 solver: Literal['bisec'] = 'bisec') -> None:
         
         # Set solver
         if solver == 'bisec':
@@ -122,7 +122,7 @@ class AMM:
         assert l > 0 and n > 0, f'invalid value: l = {l}, n = {n}'
         return l ** n
 
-    def utility(self):
+    def utility(self) -> float:
         # Calculate portfolio using log for easier calc
         # Convert to normal for readability
         return np.exp(self._utility_log(self.portfolio))
@@ -132,67 +132,29 @@ class AMM:
             self.portfolio[asset_to_track] / self.portfolio[reference_asset])
         self.BfA.append(
             self.portfolio[reference_asset] / self.portfolio[asset_to_track])
-# new_amount = self.percent_fee(
-#                         delta_assets, self.fees, asset_in, 0.01)
-#                     self.portfolio[asset_in] += new_amount
-#                 elif fee == 'triangle':
-#                     new_amount = self.triangle_fee(delta_assets, self.fees, asset_in, {
-#                         1: 0.3, 100: 0.05, 500: 0.005, 1000: 0.0005, 10000: 0.00005})
-
-    # def percent_fee(self, delta_assets: dict, asset: str, fee: float):  # fee_assets: dict,
-    #     if asset != "L":
-    #         # Apply fixed percetn fee for buying asset
-    #         fee_delta = delta_assets[asset] * fee
-    #         # Charge fee based on size of order
-    #         delta_assets[asset] -= fee_delta
-    #         # Update fee assets
-    #         self.fees[asset] += fee_delta
-    #     return delta_assets[asset]
-
-    # def triangle_fee(self, delta_assets: dict, asset: str, bracket_fees: dict):  # fee_assets: dict,
-    #     if asset != "L":
-    #         # These values can be changed, simply here to test if it works
-    #         # Also implementation can be easily changed, again just testing
-    #         # bracket_fees = {0.1: (100, 0.01), 0.2: (200, 0.02), 0.3: (300, 0.03)}
-    #         # keep track of change coming in
-    #         tracker = float(delta_assets[asset])
-    #         try:
-    #             while tracker > 0.0:
-    #                 for amount, fee in bracket_fees.items():
-    #                     fee_delta = min(amount, tracker) * fee
-    #                     # Charge fee based on size/remaining size of order
-    #                     delta_assets[asset] -= fee_delta
-    #                     # Update fee assets
-    #                     # print("HERE1:",
-    #                     #       fee_delta, fee_assets[asset])
-    #                     self.fees[asset] += fee_delta
-    #                     # print("HERE2", fee_assets[asset])
-    #                     tracker -= amount  # Reduce delta remaining by how much we have already assessed fees
-    #                     if tracker < 1e-10:  # You can adjust the epsilon value as needed
-    #                         break
-    #         # catch any errors - added bcs not sure if theres edge case whole in the above logic
-    #         except Exception as e:
-    #             print(f"Assertion Error: {e}")
-    #     # return updated changes dicitonary
-    #     return delta_assets[asset]
 
     def target_function(self, *, delta_assets: dict = {}) -> float:
+        '''
+        Calculate the target value with a change of inventories
+        '''
         tmp_portfolio = self.portfolio.copy()
         # Check for change in asset
         for asset in tmp_portfolio:
             tmp_portfolio[asset] += delta_assets.get(asset, 0.)
-        # regular calculation
+
+        # --------- regular calculation -----------
         # target = self._utility(tmp_portfolio)/self._v(tmp_portfolio['L'], self.num_assets);
         # print(target, self._utility(tmp_portfolio), self._v(tmp_portfolio['L'], self.num_assets))
         # return target-1.
+        # ----------------- end -------------------
 
-        # log calculation
+        # --------- log calculation -----------
         target = self._utility_log(
             tmp_portfolio) - self._v_log(tmp_portfolio['L'], self.num_assets)
-        # print('target', target, self._utility_log(tmp_portfolio), self._v_log(tmp_portfolio['L'], self.num_assets))
+        # ----------------- end -------------------
         return np.exp(target) - 1.
 
-    def get_cummulative_fees(self):
+    def get_cummulative_fees(self) -> float:
         total_fees = 0
         for key, value in self.fees.items():
             if key == 'L':
@@ -204,7 +166,7 @@ class AMM:
                                self.fees[self.denomination])
         return total_fees
 
-    def update_portfolio(self, *, delta_assets:dict={}, check = True):
+    def update_portfolio(self, *, delta_assets: dict={}, check: bool = True) -> Tuple[bool, dict]:
         '''
         Manually update portfolio, this may lead to a unbalanced portfolio. 
         '''

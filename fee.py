@@ -1,18 +1,22 @@
-from abc import ABC
+from abc import ABC, abstractmethod
+
+from typing import Literal, Dict
 
 class BaseFee(ABC):
     def __init__(self) -> None:
         pass
-    
+
+    @abstractmethod
     def calculate_fee(self, transaction_dict: dict, fee_asset: str) -> dict:
         raise NotImplementedError
         
 class PercentFee(BaseFee):
-    def __init__(self, percent) -> None:
+    def __init__(self, percent: float) -> None:
         super().__init__()
         self.fee_percent = percent    
          
-    def calculate_fee(self, transaction_dict: dict, fee_asset: str) -> dict:
+    def calculate_fee(self, transaction_dict: Dict[str, float], fee_asset: str) -> dict:
+        assert fee_asset in transaction_dict, f"Fee asset has to be one of the assets in the transaction."  
         fee_dict = {}
         if fee_asset != "L":
             # Apply fixed percetn fee for buying asset
@@ -28,7 +32,7 @@ class NoFee(PercentFee):
         super().__init__(0.0)
     
 class TriangleFee(BaseFee):
-    def __init__(self, bracket_fees) -> None:
+    def __init__(self, bracket_fees: dict) -> None:
         super().__init__()
         self.bracket_fees = bracket_fees
         
