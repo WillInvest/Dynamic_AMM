@@ -4,6 +4,8 @@ import math
 from fee import NoFee
 from utils import add_dict
 
+from typing import Tuple, Dict, Callable
+
 
 # Define class AMM
 class AMM:
@@ -174,7 +176,7 @@ class AMM:
     #     # return updated changes dicitonary
     #     return delta_assets[asset]
 
-    def target_function(self, *, delta_assets: dict = {}):
+    def target_function(self, *, delta_assets: dict = {}) -> float:
         tmp_portfolio = self.portfolio.copy()
         # Check for change in asset
         for asset in tmp_portfolio:
@@ -242,28 +244,19 @@ class AMM:
     #         # # update portfolio based on which fee structure we apply - needs updating to accomodate what fees is being applied
     #         # self.portfolio[k] += delta_assets[k]
 
-    def helper_gen(self, s1, s2, s2_in):
+    def helper_gen(self, s1: str, s2: str, s2_in: float) -> Callable[[float], float]:
         # Calculates target value of changed value
         assert s1 in self.portfolio and s2 in self.portfolio, f"{s1} or {s2} not in portfolio"
         assert self.portfolio[s2] + s2_in > 0., f"No enough assets/tokens"
         assert s1 != s2, f"same s1 and s2 input"
 
-        def func(x: float):
-            # if  s2 == 'L': # i.e. A L 1 -> L increases 1 and A increases x
-            #     delta_assets = {s1: x}
-            #     delta_L = s2_in
-            # elif s1 == 'L':# i.e. L A 1 -> A increases 1 and L increases x
-            #     delta_assets = {s2: s2_in}
-            #     delta_L = x
-            # else:# i.e. A B 1 -> B increases 1 and A *increases* x (x is negative)
-            #     delta_assets = {s1: x, s2: s2_in}
-            #     delta_L = 0.
+        def func(x: float) -> float:
             delta_assets = {s1: x, s2: s2_in}
             return self.target_function(delta_assets=delta_assets)
 
         return func
     
-    def quote(self, s1, s2, s2_in):
+    def quote(self, s1: str, s2: str, s2_in: float) -> Tuple[float, Dict]:
 
         function_to_solve = self.helper_gen(s1, s2, s2_in)
 
@@ -274,7 +267,7 @@ class AMM:
         info = {'asset_delta': {s1: s1_in, s2: s2_in}, 'fee': fee_dict}
         return s1_in, info
         
-    def trade(self, s1, s2, s2_in):
+    def trade(self, s1: str, s2: str, s2_in: float) -> Tuple[bool, Dict]:
         s1_in, info = self.quote(s1, s2, s2_in)
         fees = info['fee']
         updates = {s1: s1_in, s2: s2_in}
@@ -312,42 +305,6 @@ class AMM:
     #             # You can place the necessary trade logic here
     #         else:
     #             print("No Arbitrage Opportunity Detected.")
-
-
-
-# def parse_input(string: str):
-#     results = string.split(" ")
-#     results[-1] = float(results[-1])
-#     return tuple(results)
-
-
-# def find_root_bisection(func, tolerance=1e-20, max_iterations=10000, left_bound=-np.inf, right_bound=np.inf):
-#     # Find the initial range where the root lies
-#     a = -1
-#     b = 1.
-
-#     while func(a) * func(b) > 0:
-#         a = max(2 * a, left_bound)
-#         b = min(2 * b, right_bound)
-#     init_a, init_b = a, b
-#     # Perform bisection method
-#     iterations = 0
-#     while (b - a) / 2 > tolerance and iterations < max_iterations:
-#         c = (a + b) / 2
-#         if func(c) == 0:
-#             break
-#         if func(c) * func(a) < 0:
-#             b = c
-#         else:
-#             a = c
-#         iterations += 1
-#     if iterations >= max_iterations:
-#         print("MAX Iteraion reached.")
-#     root = (a + b) / 2
-#     return root, {'final_interval': (a, b),
-#                   'init': (init_a, init_b),
-#                   "final_func_values": (func(a), func((a + b) / 2), func(b)),
-#                   'init_func_values': (func(init_a), func(init_b))}
 
 
     ## Function to set ratios to market value
