@@ -2,6 +2,7 @@ import numpy as np
 from solver import find_root_bisection
 import math
 from fee import NoFee, BaseFee
+from utility_func import BaseUtility, ConstantProduct
 from utils import add_dict
 
 from typing import Tuple, Dict, Callable, Literal
@@ -17,11 +18,15 @@ class AMM:
     # Create a new AMM object
     # set the initial portfolio when creating the object
     def __init__(self, *, 
+                 utility_func: Literal["constant_product"] = "constant_product",
                  initial_portfolio: Dict[str, float] = None, 
                  initial_fee_portfolio: Dict[str, float] = None, 
                  ratio_denomination: str = "None",
                  fee_structure: BaseFee = None,
                  solver: Literal['bisec'] = 'bisec') -> None:
+        
+        if utility_func == "constant_product":
+            self.utility_func = ConstantProduct(token_symbol='L')
         
         # Set solver
         if solver == 'bisec':
@@ -66,14 +71,15 @@ class AMM:
 
         # This loops through each asset in the portfolio
         # Sets L = to the Nth root of the product
-        p = 1.
-        for key in self.portfolio:
-            if key != 'L':
-                p *= self.portfolio[key]
-        self.portfolio['L'] = p ** (1 / self.num_assets)
+        # p = 1.
+        # for key in self.portfolio:
+        #     if key != 'L':
+        #         p *= self.portfolio[key]
+        # self.portfolio['L'] = p ** (1 / self.num_assets)
         
+        num_l = self.utility_func.cal_liquid_token_amount(self.portfolio)
+        self.portfolio['L'] = num_l
         
-
     # Create list to print AMM assets
     def __repr__(self) -> str:
         ret = '-' * 20 + '\n'
@@ -87,45 +93,45 @@ class AMM:
         ret += '-' * 20 + '\n'
         return ret
 
-    @staticmethod
-    # Checks that each value in the portfolio aside from L is not 0
-    # Finds value based on log: Can Zhiyuan explain this?
-    def _utility_log(portfolio):
-        p = 0.
-        for key in portfolio:
-            if key != 'L':
-                assert portfolio[key] > 0, f"invalid value: {key}: {portfolio[key]}"
-                p += np.log(portfolio[key])
-        return p
+    # @staticmethod
+    # # Checks that each value in the portfolio aside from L is not 0
+    # # Finds value based on log: Can Zhiyuan explain this?
+    # def _utility_log(portfolio):
+    #     p = 0.
+    #     for key in portfolio:
+    #         if key != 'L':
+    #             assert portfolio[key] > 0, f"invalid value: {key}: {portfolio[key]}"
+    #             p += np.log(portfolio[key])
+    #     return p
 
-    @staticmethod
-    def _v_log(l, n):
-        # Check both l and n are greater than 0
-        assert l > 0 and n > 0, f'invalid value: l = {l}, n = {n}'
-        # Return for what??
-        return n * np.log(l)
+    # @staticmethod
+    # def _v_log(l, n):
+    #     # Check both l and n are greater than 0
+    #     assert l > 0 and n > 0, f'invalid value: l = {l}, n = {n}'
+    #     # Return for what??
+    #     return n * np.log(l)
 
-    @staticmethod
-    def _utility(portfolio):
-        # Return the value of all assets multiplied together
-        # Not including L
-        p = 1.
-        for key in portfolio:
-            if key != 'L':
-                assert portfolio[key] > 0, f"invalid value: {key} - {portfolio[key]}"
-                p *= portfolio[key]
-        return p
+    # @staticmethod
+    # def _utility(portfolio: dict):
+    #     # Return the value of all assets multiplied together
+    #     # Not including L
+    #     p = 1.
+    #     for key in portfolio:
+    #         if key != 'L':
+    #             assert portfolio[key] > 0, f"invalid value: {key} - {portfolio[key]}"
+    #             p *= portfolio[key]
+    #     return p
 
-    @staticmethod
-    def _v(l, n):
-        # Check both l and n are greater than 0
-        assert l > 0 and n > 0, f'invalid value: l = {l}, n = {n}'
-        return l ** n
+    # @staticmethod
+    # def _v(l, n):
+    #     # Check both l and n are greater than 0
+    #     assert l > 0 and n > 0, f'invalid value: l = {l}, n = {n}'
+    #     return l ** n
 
-    def utility(self) -> float:
-        # Calculate portfolio using log for easier calc
-        # Convert to normal for readability
-        return np.exp(self._utility_log(self.portfolio))
+    # def utility(self) -> float:
+    #     # Calculate portfolio using log for easier calc
+    #     # Convert to normal for readability
+    #     return np.exp(self._utility_log(self.portfolio))
 
     def track_asset_ratio(self, asset_to_track, reference_asset):
         self.AfB.append(
@@ -149,8 +155,7 @@ class AMM:
         # ----------------- end -------------------
 
         # --------- log calculation -----------
-        target = self._utility_log(
-            tmp_portfolio) - self._v_log(tmp_portfolio['L'], self.num_assets)
+        target = self.utility_func.target_function(full_portfolio=tmp_portfolio)
         # ----------------- end -------------------
         return np.exp(target) - 1.
 
@@ -184,27 +189,6 @@ class AMM:
             return False, {"error_info": f"AssertionError: {k} not in {delta_assets}."}
         return True, {}
 
-    # def update_portfolio(self, *, delta_assets: dict = {}, check=True, asset_in: str = None, fee: str = None):
-    #     '''
-    #     Manually update portfolio, this may lead to a unbalanced portfolio.
-    #     '''
-    #     if check:
-    #         target = self.target_function(delta_assets=delta_assets)
-    #         # Ensure the target is greater than 0
-    #         assert abs(target) < 1e-8, f"Target: {target}"
-    #         # Update portfolio with changes in assets
-    #         if fee:
-    #             if fee == 'percent':
-    #                 # provides negative value
-    #                 new_amount = self.percent_fee(
-    #                     delta_assets, asset_in, 0.01)
-    #                 self.portfolio[asset_in] += new_amount
-    #             elif fee == 'triangle':
-    #                 new_amount = self.triangle_fee(delta_assets, asset_in, )
-    #                 self.portfolio[asset_in] += new_amount
-
-    #         # # update portfolio based on which fee structure we apply - needs updating to accomodate what fees is being applied
-    #         # self.portfolio[k] += delta_assets[k]
 
     def helper_gen(self, s1: str, s2: str, s2_in: float) -> Callable[[float], float]:
         # Calculates target value of changed value
@@ -228,26 +212,9 @@ class AMM:
         fee_dict = self.fee_structure.calculate_fee({s1: s1_in, s2: s2_in}, s2)
         info = {'asset_delta': {s1: s1_in, s2: s2_in}, 'fee': fee_dict}
         return s1_in, info
-        
-    def trade(self, s1: str, s2: str, s2_in: float) -> Tuple[bool, Dict]:
-        s1_in, info = self.quote(s1, s2, s2_in)
-        fees = info['fee']
-        updates = {s1: s1_in, s2: s2_in}
-        success1, update_info1 = self.update_portfolio(delta_assets=updates, check=True)
-        success2, update_info2 = self.update_portfolio(delta_assets=fees, check=False)
-        
-        info['update_info_before_fee'] = update_info1
-        info['update_info_after_fee'] = update_info2
-        
-        for keys in fees:
-            self.fees[keys] += fees[keys] # update fee portfolio
-            
-        if not (success1 or success2):
-            print(f"update success before fee: {success1}, after fee: {success2}")
-            print(info)
-            raise ValueError("illegal trade")
-        
-        return success1 and success2, info
+
+    
+
         
     # def detect_arbitrage(self, market_price):
     # # Assuming amm has asset pairs and tracks asset ratios
@@ -290,8 +257,78 @@ class AMM:
 
     
 
-
-
+class SimpleFeeAMM(AMM):
+    def __init__(self, *, 
+                 utility_func: Literal['constant_product'] = "constant_product", 
+                 initial_portfolio: Dict[str, float] = None, 
+                 initial_fee_portfolio: Dict[str, float] = None, 
+                 ratio_denomination: str = "None", 
+                 fee_structure: BaseFee = None, 
+                 solver: Literal['bisec'] = 'bisec') -> None:
+        super().__init__(utility_func=utility_func, 
+                         initial_portfolio=initial_portfolio, 
+                         initial_fee_portfolio=initial_fee_portfolio, 
+                         ratio_denomination=ratio_denomination, 
+                         fee_structure=fee_structure, 
+                         solver=solver)
+        
+    def trade(self, s1: str, s2: str, s2_in: float) -> Tuple[bool, Dict]:
+        s1_in, info = self.quote(s1, s2, s2_in)
+        fees = info['fee']
+        updates = {s1: s1_in, s2: s2_in}
+        success1, update_info1 = self.update_portfolio(delta_assets=updates, check=True)
+        # success2, update_info2 = self.update_portfolio(delta_assets=fees, check=False)
+        
+        info['update_info_before_fee'] = update_info1
+        # info['update_info_after_fee'] = update_info2
+        
+        for keys in fees:
+            self.fees[keys] += fees[keys] # update fee portfolio
+        
+        return success1, info
     
+        if not (success1 or success2):
+            print(f"update success before fee: {success1}, after fee: {success2}")
+            print(info)
+            raise ValueError("illegal trade")
+        
+        return success1 and success2, info
+    
+# class CompoundFeeAMM(AMM):
+#     def __init__(self, *, 
+#                  utility_func: Literal['constant_product'] = "constant_product", 
+#                  initial_portfolio: Dict[str, float] = None, 
+#                  initial_fee_portfolio: Dict[str, float] = None, 
+#                  ratio_denomination: str = "None", 
+#                  fee_structure: BaseFee = None, 
+#                  solver: Literal['bisec'] = 'bisec') -> None:
+#         super().__init__(utility_func=utility_func, 
+#                          initial_portfolio=initial_portfolio, 
+#                          initial_fee_portfolio=initial_fee_portfolio, 
+#                          ratio_denomination=ratio_denomination, 
+#                          fee_structure=fee_structure, 
+#                          solver=solver)
+        
+#     def trade(self, s1: str, s2: str, s2_in: float) -> Tuple[bool, Dict]:
+#         s1_in, info = self.quote(s1, s2, s2_in)
+#         fees = info['fee']
+#         updates = {s1: s1_in, s2: s2_in}
+#         success1, update_info1 = self.update_portfolio(delta_assets=updates, check=True)
+#         # success2, update_info2 = self.update_portfolio(delta_assets=fees, check=False)
+        
+#         info['update_info_before_fee'] = update_info1
+#         # info['update_info_after_fee'] = update_info2
+        
+#         for keys in fees:
+#             self.fees[keys] += fees[keys] # update fee portfolio
+        
+#         # return success1, info
+    
+#         if not (success1 or success2):
+#             print(f"update success before fee: {success1}, after fee: {success2}")
+#             print(info)
+#             raise ValueError("illegal trade")
+        
+#         return success1 and success2, info
 
 

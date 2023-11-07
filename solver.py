@@ -7,11 +7,12 @@ def find_root_bisection(func, *,
                         right_bound=np.inf):
     # Find the initial range where the root lies
     a = -1
-    b = 1.
+    b = 1
 
-    while func(a) * func(b) > 0:
-        a = max(2 * a, left_bound)
-        b = min(2 * b, right_bound)
+    while True:
+        a = max(2 * a, left_bound) if np.isinf(left_bound) else left_bound
+        b = min(2 * b, right_bound) if np.isinf(right_bound) else right_bound
+        if func(a) * func(b) <= 0: break
     init_a, init_b = a, b
     # Perform bisection method
     iterations = 0

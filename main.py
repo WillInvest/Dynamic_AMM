@@ -29,7 +29,7 @@ def main():
         #Function call for resetting ratio to market value
         #Parameter 1: Market Value
         #Parameter 2: Numerator for asset ratio eg: (B(parameter 2)/A(parameter 3))
-        amm.set_market_trade(10,'B','A')
+        # amm.set_market_trade(10,'B','A')
         
         # function_to_solve = amm.helper_gen(s1, s2, s2_in)
 
