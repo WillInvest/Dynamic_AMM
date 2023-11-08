@@ -3,7 +3,7 @@ from solver import find_root_bisection
 import math
 from fee import NoFee, BaseFee
 from utility_func import BaseUtility, ConstantProduct
-from utils import add_dict
+from utils import add_dict, FeeDict, distribute_fees
 
 from typing import Tuple, Dict, Callable, Literal
 
@@ -54,6 +54,7 @@ class AMM:
         # Set the fee portfolio to default fee portfolio otherwise
         else:
             self.fees = self.fee_init_portfolio.copy()
+        self.fees = FeeDict(self.fees)
 
         # Create a list to store asset ratios
         self.AfB = []
@@ -79,6 +80,18 @@ class AMM:
         
         num_l = self.utility_func.cal_liquid_token_amount(self.portfolio)
         self.portfolio['L'] = num_l
+        
+        self.lp_tokens = {'initial': num_l}
+        
+    def register_lp(self, user: str)-> None:
+        '''
+        Register a liquidity provider entry. 
+        '''
+        
+        if user in self.lp_tokens:
+            print(f"User {user} is already in LP list.")
+        else:
+            self.lp_tokens[user] = 0.
         
     # Create list to print AMM assets
     def __repr__(self) -> str:
@@ -188,6 +201,16 @@ class AMM:
         except AssertionError:
             return False, {"error_info": f"AssertionError: {k} not in {delta_assets}."}
         return True, {}
+    
+    def update_fee(self, *, fees: dict) -> Tuple[bool, dict]:
+        try:
+            for keys in fees:
+                assert fees in self.fees, f"Fee symbol {keys} is not legit."
+                self.fees[keys] += fees[keys] # update fee portfolio
+        except AssertionError as info:
+            return False, {'error_info': info}
+        return True, {}
+        
 
 
     def helper_gen(self, s1: str, s2: str, s2_in: float) -> Callable[[float], float]:
@@ -272,28 +295,46 @@ class SimpleFeeAMM(AMM):
                          fee_structure=fee_structure, 
                          solver=solver)
         
-    def trade(self, s1: str, s2: str, s2_in: float) -> Tuple[bool, Dict]:
+        
+    def register_lp(self, user: str) -> None:
+        assert sum(self.fees.values()) == 0, f"Must claim fees before registering a new liquidity provider."
+        return super().register_lp(user)
+    
+    def _trade(self, s1: str, s2: str, s2_in: float) -> Tuple[bool, Dict]:
         s1_in, info = self.quote(s1, s2, s2_in)
         fees = info['fee']
         updates = {s1: s1_in, s2: s2_in}
         success1, update_info1 = self.update_portfolio(delta_assets=updates, check=True)
-        # success2, update_info2 = self.update_portfolio(delta_assets=fees, check=False)
-        
+
         info['update_info_before_fee'] = update_info1
-        # info['update_info_after_fee'] = update_info2
+        if not success1: return False, info
         
-        for keys in fees:
-            self.fees[keys] += fees[keys] # update fee portfolio
+        success2, update_info2 = self.update_fee(fees)
+        info["update_info_fee"] = update_info2
         
-        return success1, info
+        return success2, info
+        
+    def trade_swap(self, s1: str, s2: str, s2_in: float) -> Tuple[bool, Dict]:
+        if 'L' in (s1, s2):
+            return False, {'error_info': f"Cannot update liqudity tokens using 'trade_swap'."}
+        
+        return self._trade(s1, s2, s2_in)
+        
+    def trade_liquidity(self, s1: str, s2: str, s2_in: float, lp_user: str) -> Tuple[bool, Dict]:
+        if 'L' not in (s1, s2):
+            return False, {'error_info': f"Must trade liquidity tokens using 'trade_liquidity'."}
+        if not self.fees.is_empty():
+            return False, {'error_info': f"Must claim fees before liquidity events."}
+        if lp_user not in self.lp_tokens: 
+            return False, {'error_info': f"Non-registered LP user: {lp_user}."}
+        return self._trade(s1, s2, s2_in)
     
-        if not (success1 or success2):
-            print(f"update success before fee: {success1}, after fee: {success2}")
-            print(info)
-            raise ValueError("illegal trade")
+    def claim_fee(self):
+        # ret = self.fees.copy()
+        ret= distribute_fees(self.lp_tokens, self.fees)
+        self.fees.reset()
+        return ret
         
-        return success1 and success2, info
-    
 # class CompoundFeeAMM(AMM):
 #     def __init__(self, *, 
 #                  utility_func: Literal['constant_product'] = "constant_product", 
