@@ -1,4 +1,4 @@
-from AMM import AMM
+from AMM import AMM, SimpleFeeAMM
 from utils import parse_input
 from fee import TriangleFee, PercentFee
 
@@ -8,7 +8,7 @@ def main():
     fee2 = TriangleFee({1: 0.3, 100: 0.05, 500: 0.005, 1000: 0.0005, 10000: 0.00005})
     
     # amm = AMM()
-    amm = AMM(fee_structure=fee2)
+    amm = SimpleFeeAMM(fee_structure=fee2)
 
     print("Initial AMM: ")
     print(amm)
@@ -24,7 +24,7 @@ def main():
         s1, s2, s2_in = order
         print(order)
         ##amm.track_asset_ratio('A','B')
-        amm.trade(s1, s2, s2_in)
+        amm.trade_swap(s1, s2, s2_in)
 
         #Function call for resetting ratio to market value
         #Parameter 1: Market Value

@@ -202,10 +202,10 @@ class AMM:
             return False, {"error_info": f"AssertionError: {k} not in {delta_assets}."}
         return True, {}
     
-    def update_fee(self, *, fees: dict) -> Tuple[bool, dict]:
+    def update_fee(self, fees: dict) -> Tuple[bool, dict]:
         try:
             for keys in fees:
-                assert fees in self.fees, f"Fee symbol {keys} is not legit."
+                assert keys in self.fees, f"Fee symbol {keys} is not legit."
                 self.fees[keys] += fees[keys] # update fee portfolio
         except AssertionError as info:
             return False, {'error_info': info}
