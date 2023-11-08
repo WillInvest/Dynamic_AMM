@@ -6,7 +6,7 @@ from utility_func import BaseUtility, ConstantProduct
 from utils import add_dict, FeeDict, distribute_fees
 
 from typing import Tuple, Dict, Callable, Literal
-from abc import ABC
+from abc import ABC, abstractmethod
 
 
 # Define class AMM
@@ -188,8 +188,31 @@ class AMM(ABC):
         fee_dict = self.fee_structure.calculate_fee({s1: s1_in, s2: s2_in}, s2)
         info = {'asset_delta': {s1: s1_in, s2: s2_in}, 'fee': fee_dict}
         return s1_in, info
-
     
+    def trade_swap(self, s1: str, s2: str, s2_in: float) -> Tuple[bool, Dict]:
+        '''
+        The function should only do swaps.
+        '''
+        
+        if 'L' in (s1, s2):
+            return False, {'error_info': f"Cannot update liqudity tokens using 'trade_swap'."}
+        
+        return self._trade(s1, s2, s2_in)
+        
+    def trade_liquidity(self, s1: str, s2: str, s2_in: float, lp_user: str) -> Tuple[bool, Dict]:
+        '''
+        The function allows the registered LP users
+        to trade liquidity tokens. 
+        '''
+        if 'L' not in (s1, s2):
+            return False, {'error_info': f"Must trade liquidity tokens using 'trade_liquidity'."}
+        if lp_user not in self.lp_tokens: 
+            return False, {'error_info': f"Non-registered LP user: {lp_user}."}
+        return self._trade(s1, s2, s2_in)
+    
+    @abstractmethod
+    def _trade(self, s1: str, s2: str, s2_in: float) -> Tuple[bool, Dict]:
+        raise NotImplementedError
 
 class SimpleFeeAMM(AMM):
     def __init__(self, *, 
@@ -225,20 +248,10 @@ class SimpleFeeAMM(AMM):
         
         return success2, info
         
-    def trade_swap(self, s1: str, s2: str, s2_in: float) -> Tuple[bool, Dict]:
-        if 'L' in (s1, s2):
-            return False, {'error_info': f"Cannot update liqudity tokens using 'trade_swap'."}
-        
-        return self._trade(s1, s2, s2_in)
-        
     def trade_liquidity(self, s1: str, s2: str, s2_in: float, lp_user: str) -> Tuple[bool, Dict]:
-        if 'L' not in (s1, s2):
-            return False, {'error_info': f"Must trade liquidity tokens using 'trade_liquidity'."}
         if not self.fees.is_empty():
             return False, {'error_info': f"Must claim fees before liquidity events."}
-        if lp_user not in self.lp_tokens: 
-            return False, {'error_info': f"Non-registered LP user: {lp_user}."}
-        return self._trade(s1, s2, s2_in)
+        return super().trade_liquidity(s1, s2, s2_in, lp_user)
     
     def claim_fee(self):
         # ret = self.fees.copy()
