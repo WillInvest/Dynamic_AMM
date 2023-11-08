@@ -6,10 +6,11 @@ from utility_func import BaseUtility, ConstantProduct
 from utils import add_dict, FeeDict, distribute_fees
 
 from typing import Tuple, Dict, Callable, Literal
+from abc import ABC
 
 
 # Define class AMM
-class AMM:
+class AMM(ABC):
 
     # Initalize default values of A and B in portfolio
     default_init_portfolio = {'A': 1000.0, 'B': 10000.0, "L": None}
@@ -258,25 +259,6 @@ class AMM:
     #         else:
     #             print("No Arbitrage Opportunity Detected.")
 
-
-    ## Function to set ratios to market value
-    def set_market_trade(self, MP, inv1, inv2):
-        inventory_1 = self.portfolio[inv1]
-        
-        inventory_2 = self.portfolio[inv2]
-        
-        ratio = inventory_1 / inventory_2
-
-        if ratio > MP:
-            y = math.sqrt(inventory_1 * inventory_2/MP) - inventory_2
-            self.trade_swap(inv1,inv2,y)
-            #print(f"This is your trade to execute: {inv2} {inv1} {y}")
-            
-        elif ratio < MP:
-            x = math.sqrt(MP * inventory_1 *inventory_2) - inventory_1
-            
-            self.trade_swap(inv2,inv1,x)
-            #print(f"This is your trade to execute: {inv1} {inv2} {x}")
 
     
 
