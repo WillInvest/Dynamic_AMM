@@ -1,5 +1,5 @@
-from AMM import AMM
-from AMM import SimpleFeeAMM
+from amm import AMM
+from amm import SimpleFeeAMM
 from utils import parse_input, set_market_trade
 from fee import TriangleFee, PercentFee
 from threading import Thread

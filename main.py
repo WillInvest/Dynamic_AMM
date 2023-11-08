@@ -1,4 +1,4 @@
-from AMM import AMM, SimpleFeeAMM
+from amm import AMM, SimpleFeeAMM
 from utils import parse_input
 from fee import TriangleFee, PercentFee
 

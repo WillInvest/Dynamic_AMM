@@ -1,5 +1,6 @@
 from typing import Dict
 import math
+from amm import AMM
 
 def parse_input(string: str):
     results = string.split(" ")
@@ -53,7 +54,7 @@ def distribute_fees(lp_tokens: dict, fees: FeeDict) -> Dict[str, Dict[str, float
     return ret
         
         
-def set_market_trade(amm, MP, inv1, inv2) -> None:
+def set_market_trade(amm: AMM, MP: float, inv1: str, inv2: str) -> None:
     inventory_1 = amm.portfolio[inv1]
     
     inventory_2 = amm.portfolio[inv2]
