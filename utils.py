@@ -1,4 +1,5 @@
 from typing import Dict
+import math
 
 def parse_input(string: str):
     results = string.split(" ")
@@ -51,4 +52,23 @@ def distribute_fees(lp_tokens: dict, fees: FeeDict) -> Dict[str, Dict[str, float
             
     return ret
         
+        
+def set_market_trade(amm, MP, inv1, inv2) -> None:
+    inventory_1 = amm.portfolio[inv1]
+    
+    inventory_2 = amm.portfolio[inv2]
+    
+    ratio = inventory_1 / inventory_2
+
+    if ratio > MP:
+        y = math.sqrt(inventory_1 * inventory_2/MP) - inventory_2
+        amm.trade_swap(inv1,inv2,y)
+        #print(f"This is your trade to execute: {inv2} {inv1} {y}")
+        
+    elif ratio < MP:
+        x = math.sqrt(MP * inventory_1 *inventory_2) - inventory_1
+        
+        amm.trade_swap(inv2,inv1,x)
+        #print(f"This is your trade to execute: {inv1} {inv2} {x}")
+
         

@@ -269,13 +269,13 @@ class AMM:
 
         if ratio > MP:
             y = math.sqrt(inventory_1 * inventory_2/MP) - inventory_2
-            self.trade(inv1,inv2,y)
+            self.trade_swap(inv1,inv2,y)
             #print(f"This is your trade to execute: {inv2} {inv1} {y}")
             
         elif ratio < MP:
             x = math.sqrt(MP * inventory_1 *inventory_2) - inventory_1
             
-            self.trade(inv2,inv1,x)
+            self.trade_swap(inv2,inv1,x)
             #print(f"This is your trade to execute: {inv1} {inv2} {x}")
 
     
