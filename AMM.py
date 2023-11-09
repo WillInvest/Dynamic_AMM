@@ -3,7 +3,7 @@ from solver import find_root_bisection
 import math
 from fee import NoFee, BaseFee
 from utility_func import BaseUtility, ConstantProduct
-from utils import add_dict, FeeDict, distribute_fees
+from utils import add_dict, FeeDict, distribute_fees, add_lp_tokens
 
 from typing import Tuple, Dict, Callable, Literal
 from abc import ABC, abstractmethod
@@ -75,6 +75,9 @@ class AMM(ABC):
         self.portfolio['L'] = num_l
         
         self.lp_tokens = {'initial': num_l}
+        
+    def curr_utility(self) -> float:
+        return self.utility_func.U(self.portfolio)
         
     def register_lp(self, user: str)-> None:
         '''
@@ -178,16 +181,49 @@ class AMM(ABC):
 
         return func
     
-    def quote(self, s1: str, s2: str, s2_in: float) -> Tuple[float, Dict]:
+    def _quote_pre_fee(self, s1: str, s2: str, s2_in: float) -> Tuple[float, Dict]:  
+        # assert fee_asset in (s1, s2), f"Illegal fee asset: {fee_asset} for transaction between {s1} and {s2}."
+        
+        fee_dict = self.fee_structure.calculate_fee({s1: None, s2: s2_in}, s2, portfolio = self.portfolio)
+        actual_s2_in = s2_in - fee_dict[s2]
+        
+        s1_in, info = self._quote_no_fee(s1, s2, actual_s2_in)
 
+        info.update({'asset_delta': {s1: s1_in, s2: actual_s2_in}, 'fee': fee_dict})
+        return s1_in, info 
+    
+    def _quote_post_fee(self, s1: str, s2: str, s2_in: float) -> Tuple[float, Dict]:  
+
+        s1_in, info = self._quote_no_fee(s1, s2, s2_in)
+        
+        fee_dict = self.fee_structure.calculate_fee({s1: s1_in, s2: s2_in}, s1, portfolio = self.portfolio)
+        
+        actual_s1_in = s1_in + fee_dict[s1]
+        
+        info.update({'asset_delta': {s1: s1_in, s2: s2_in}, 'fee': fee_dict})
+        return actual_s1_in, info 
+    
+    def _quote_no_fee(self, s1: str, s2: str, s2_in: float) -> Tuple[float, Dict]:  
+        # assert fee_asset in (s1, s2), f"Illegal fee asset: {fee_asset} for transaction between {s1} and {s2}."
+            
         function_to_solve = self.helper_gen(s1, s2, s2_in)
 
         s1_in, _ = self.solver(
             function_to_solve, left_bound=-self.portfolio[s1] + 1)
-        
-        fee_dict = self.fee_structure.calculate_fee({s1: s1_in, s2: s2_in}, s2)
-        info = {'asset_delta': {s1: s1_in, s2: s2_in}, 'fee': fee_dict}
-        return s1_in, info
+
+        info = {'asset_delta': {s1: s1_in, s2: s2_in}, 'fee': {}}
+        return s1_in, info 
+    
+    def quote(self, s1: str, s2: str, s2_in: float) -> Tuple[float, Dict]:     
+        is_liquidity_event = ('L' in (s1, s2))
+        if not is_liquidity_event: # swap
+            if s2_in >= 0: 
+                return self._quote_pre_fee(s1, s2, s2_in)
+            else:
+                return self._quote_post_fee(s1, s2, s2_in)
+        else:
+            return self._quote_no_fee(s1, s2, s2_in)
+            
     
     def trade_swap(self, s1: str, s2: str, s2_in: float) -> Tuple[bool, Dict]:
         '''
@@ -215,20 +251,6 @@ class AMM(ABC):
         raise NotImplementedError
 
 class SimpleFeeAMM(AMM):
-    def __init__(self, *, 
-                 utility_func: Literal['constant_product'] = "constant_product", 
-                 initial_portfolio: Dict[str, float] = None, 
-                 initial_fee_portfolio: Dict[str, float] = None, 
-                 ratio_denomination: str = "None", 
-                 fee_structure: BaseFee = None, 
-                 solver: Literal['bisec'] = 'bisec') -> None:
-        super().__init__(utility_func=utility_func, 
-                         initial_portfolio=initial_portfolio, 
-                         initial_fee_portfolio=initial_fee_portfolio, 
-                         ratio_denomination=ratio_denomination, 
-                         fee_structure=fee_structure, 
-                         solver=solver)
-        
         
     def register_lp(self, user: str) -> None:
         assert sum(self.fees.values()) == 0, f"Must claim fees before registering a new liquidity provider."
@@ -236,8 +258,9 @@ class SimpleFeeAMM(AMM):
     
     def _trade(self, s1: str, s2: str, s2_in: float) -> Tuple[bool, Dict]:
         s1_in, info = self.quote(s1, s2, s2_in)
+        info['pay_s1'] = s1_in
         fees = info['fee']
-        updates = {s1: s1_in, s2: s2_in}
+        updates = info['asset_delta']
         success1, update_info1 = self.update_portfolio(delta_assets=updates, check=True)
 
         info['update_info_before_fee'] = update_info1
@@ -260,34 +283,17 @@ class SimpleFeeAMM(AMM):
         return ret
         
 # class CompoundFeeAMM(AMM):
-#     def __init__(self, *, 
-#                  utility_func: Literal['constant_product'] = "constant_product", 
-#                  initial_portfolio: Dict[str, float] = None, 
-#                  initial_fee_portfolio: Dict[str, float] = None, 
-#                  ratio_denomination: str = "None", 
-#                  fee_structure: BaseFee = None, 
-#                  solver: Literal['bisec'] = 'bisec') -> None:
-#         super().__init__(utility_func=utility_func, 
-#                          initial_portfolio=initial_portfolio, 
-#                          initial_fee_portfolio=initial_fee_portfolio, 
-#                          ratio_denomination=ratio_denomination, 
-#                          fee_structure=fee_structure, 
-#                          solver=solver)
-        
-#     def trade(self, s1: str, s2: str, s2_in: float) -> Tuple[bool, Dict]:
+
+#     def _trade(self, s1: str, s2: str, s2_in: float) -> Tuple[bool, Dict]:
 #         s1_in, info = self.quote(s1, s2, s2_in)
 #         fees = info['fee']
 #         updates = {s1: s1_in, s2: s2_in}
 #         success1, update_info1 = self.update_portfolio(delta_assets=updates, check=True)
-#         # success2, update_info2 = self.update_portfolio(delta_assets=fees, check=False)
+
+#         assert len(fees) == 1, f"Fees in more than one asset in one transaction is not supported {fees}. "
         
+#         fees.keys()
 #         info['update_info_before_fee'] = update_info1
-#         # info['update_info_after_fee'] = update_info2
-        
-#         for keys in fees:
-#             self.fees[keys] += fees[keys] # update fee portfolio
-        
-#         # return success1, info
     
 #         if not (success1 or success2):
 #             print(f"update success before fee: {success1}, after fee: {success2}")
