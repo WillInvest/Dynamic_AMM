@@ -8,12 +8,13 @@ def main():
     fee2 = TriangleFee({1: 0.3, 100: 0.05, 500: 0.005, 1000: 0.0005, 10000: 0.00005})
     
     # amm = AMM()
-    amm = SimpleFeeAMM(fee_structure=fee2)
+    amm = SimpleFeeAMM(fee_structure=fee1)
 
     print("Initial AMM: ")
     print(amm)
     # while True:
     for i in range(100000):
+        print()
         s2string = input("Input string (i.e. A B 1): ")
         if s2string == 'r':
             amm = AMM()
@@ -22,9 +23,13 @@ def main():
             continue  # reset
         order = parse_input(s2string)
         s1, s2, s2_in = order
-        print(order)
+        # print(order)
         ##amm.track_asset_ratio('A','B')
-        amm.trade_swap(s1, s2, s2_in)
+        succ, info = amm.trade_swap(s1, s2, s2_in)
+        if succ:
+            print(f"User pay {s1}: {info['pay_s1']}")
+        else:
+            print(f"unsuccessful trade: {info}")
 
         #Function call for resetting ratio to market value
         #Parameter 1: Market Value
@@ -42,6 +47,7 @@ def main():
         # amm.update_portfolio(delta_assets=updates, asset_in=s2, fee='triangle')
         print("Updated portfolio:")
         print(amm)
+        print()
 #     def update_portfolio(self, *, delta_assets: dict = {}, check=True, asset_in: str = None, fee=None):
 
 

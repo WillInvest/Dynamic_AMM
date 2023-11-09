@@ -7,22 +7,23 @@ class BaseFee(ABC):
         pass
 
     @abstractmethod
-    def calculate_fee(self, transaction_dict: dict, fee_asset: str) -> dict:
+    def calculate_fee(self, transaction_dict: dict, fee_asset: str, **kwargs) -> dict:
         raise NotImplementedError
         
 class PercentFee(BaseFee):
     def __init__(self, percent: float) -> None:
         super().__init__()
+        assert 0.<=percent<=1.
         self.fee_percent = percent    
          
-    def calculate_fee(self, transaction_dict: Dict[str, float], fee_asset: str) -> dict:
+    def calculate_fee(self, transaction_dict: Dict[str, float], fee_asset: str, **kwargs) -> dict:
         assert fee_asset in transaction_dict, f"Fee asset has to be one of the assets in the transaction."  
         fee_dict = {}
         if fee_asset != "L":
             # Apply fixed percetn fee for buying asset
-            fee_delta = transaction_dict[fee_asset] * self.fee_percent
+            fee_delta = abs(transaction_dict[fee_asset]) * self.fee_percent
             # Charge fee based on size of order
-            fee_dict[fee_asset] = fee_dict.get(fee_asset, 0.) - fee_delta
+            fee_dict[fee_asset] = fee_dict.get(fee_asset, 0.) + fee_delta
             # # Update fee assets
             # self.fees[asset] += fee_delta
         return fee_dict
@@ -36,7 +37,7 @@ class TriangleFee(BaseFee):
         super().__init__()
         self.bracket_fees = bracket_fees
         
-    def calculate_fee(self, transaction_dict: dict, fee_asset: str) -> dict:
+    def calculate_fee(self, transaction_dict: dict, fee_asset: str, **kwargs) -> dict:
         
         fee_dict = {}
         if fee_asset != "L": # TODO: logic for "L"
@@ -50,7 +51,7 @@ class TriangleFee(BaseFee):
                     for amount, fee in self.bracket_fees.items():
                         fee_delta = min(amount, tracker) * fee
                         # Charge fee based on size/remaining size of order
-                        fee_dict[fee_asset] = fee_dict.get(fee_asset, 0.) -  fee_delta
+                        fee_dict[fee_asset] = fee_dict.get(fee_asset, 0.) +  fee_delta
                         # Update fee assets
                         # print("HERE1:",
                         #       fee_delta, fee_assets[asset])

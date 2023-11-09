@@ -1,6 +1,6 @@
 from typing import Dict
 import math
-from amm import AMM
+
 
 def parse_input(string: str):
     results = string.split(" ")
@@ -52,9 +52,16 @@ def distribute_fees(lp_tokens: dict, fees: FeeDict) -> Dict[str, Dict[str, float
             ret[lp_user][asset] += (lp_tokens[lp_user]/sum_tokens)*fees[asset]
             
     return ret
+
+def add_lp_tokens(lp_tokens: dict, num_tokens: float) -> None:
+    assert num_tokens >= 0, f"Added number of tokens should be non-negative: {num_tokens}"
+    sum_tokens = sum(lp_tokens.values())
+    for lp_user in lp_tokens:
+        lp_tokens[lp_user] += (lp_tokens[lp_user]/sum_tokens)*num_tokens
+            
         
-        
-def set_market_trade(amm: AMM, MP: float, inv1: str, inv2: str) -> None:
+
+def set_market_trade(amm, MP: float, inv1: str, inv2: str) -> None:
     inventory_1 = amm.portfolio[inv1]
     
     inventory_2 = amm.portfolio[inv2]
