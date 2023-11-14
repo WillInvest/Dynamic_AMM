@@ -184,7 +184,7 @@ class AMM(ABC):
     def _quote_pre_fee(self, s1: str, s2: str, s2_in: float) -> Tuple[float, Dict]:  
         # assert fee_asset in (s1, s2), f"Illegal fee asset: {fee_asset} for transaction between {s1} and {s2}."
         
-        fee_dict = self.fee_structure.calculate_fee({s1: None, s2: s2_in}, s2, portfolio = self.portfolio)
+        fee_dict = self.fee_structure.calculate_fee({s1: None, s2: s2_in}, s2, amm = self)
         actual_s2_in = s2_in - fee_dict[s2]
         
         s1_in, info = self._quote_no_fee(s1, s2, actual_s2_in)
@@ -196,7 +196,7 @@ class AMM(ABC):
 
         s1_in, info = self._quote_no_fee(s1, s2, s2_in)
         
-        fee_dict = self.fee_structure.calculate_fee({s1: s1_in, s2: s2_in}, s1, portfolio = self.portfolio)
+        fee_dict = self.fee_structure.calculate_fee({s1: s1_in, s2: s2_in}, s1, amm = self)
         
         actual_s1_in = s1_in + fee_dict[s1]
         
