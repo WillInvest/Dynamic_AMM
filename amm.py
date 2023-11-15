@@ -252,6 +252,9 @@ class AMM(ABC):
         info.update({'asset_delta': {s1: s1_in, s2: s2_in}, 'fee': fee_dict})
         return actual_s1_in, info
 
+# asset_out, _ = amm._quote_no_fee(
+#                 receive_asset, fee_asset, transaction_dict[fee_asset])
+
     def _quote_no_fee(self, s1: str, s2: str, s2_in: float) -> Tuple[float, Dict]:
         # assert fee_asset in (s1, s2), f"Illegal fee asset: {fee_asset} for transaction between {s1} and {s2}."
 
