@@ -57,18 +57,21 @@ class TriangleFee(BaseFee):
             receive_asset = [
                 asset for asset in transact_keys if asset != fee_asset][0]
             # get delta x to set upper limit
-            asset_out, _ = amm._quote_no_fee(
+            asset_out, info = amm._quote_no_fee(
                 receive_asset, fee_asset, transaction_dict[fee_asset])
             # define integrand
+            print("receive", receive_asset, "out", asset_out)
+            print("info", info)
 
             def _tri_integrand(w, x, y, f, m):
-                return f + m * (x * y / (x - w)**2 - y / x)
+                return f + m * (((x * y) / (x - w)**2) - (y / x))
             # get fee
             fee, error = quad(_tri_integrand, 0, asset_out, args=(
                 amm.portfolio[receive_asset], amm.portfolio[fee_asset], self.max_fee, self.fee_slope))
+            print("FEE:", fee)
             # charge fee based on shift
             # # i think getting fee from dict is unnecessary but for sake of consistency
-            fee_dict[fee_asset] = fee_dict.get(fee_asset, 0.) + fee
+            fee_dict[fee_asset] = fee  # fee_dict.get(fee_asset, 0.) + fee
         return fee_dict
 
     # def calculate_fee(self, transaction_dict: dict, fee_asset: str, **kwargs) -> dict:
