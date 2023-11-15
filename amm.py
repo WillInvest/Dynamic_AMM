@@ -7,6 +7,7 @@ from utils import add_dict, FeeDict, distribute_fees, add_lp_tokens
 
 from typing import Tuple, Dict, Callable, Literal
 from abc import ABC, abstractmethod
+from threading import Lock
 
 
 # Define class AMM
@@ -24,10 +25,13 @@ class AMM(ABC):
                  initial_fee_portfolio: Dict[str, float] = None, 
                  ratio_denomination: str = "None",
                  fee_structure: BaseFee = None,
+                 fee_precharge: bool = True,
                  solver: Literal['bisec'] = 'bisec') -> None:
         
         if utility_func == "constant_product":
             self.utility_func = ConstantProduct(token_symbol='L')
+            
+        self.fee_precharge = fee_precharge
         
         # Set solver
         if solver == 'bisec':
@@ -76,6 +80,8 @@ class AMM(ABC):
         
         self.lp_tokens = {'initial': num_l}
         
+        self.lock = Lock()
+        
     def curr_utility(self) -> float:
         return self.utility_func.U(self.portfolio)
         
@@ -100,6 +106,8 @@ class AMM(ABC):
         for fee in self.fees:
             ret += f"F{fee}: {self.fees[fee]}\n"
         ret += '-' * 20 + '\n'
+        ret += f"Utility: {self.curr_utility()}\n"
+        ret += '-' * 20 + '\n'
         return ret
 
     def track_asset_ratio(self, asset_to_track, reference_asset):
@@ -107,6 +115,10 @@ class AMM(ABC):
             self.portfolio[asset_to_track] / self.portfolio[reference_asset])
         self.BfA.append(
             self.portfolio[reference_asset] / self.portfolio[asset_to_track])
+    
+    def asset_ratio(self, asset_to_track, reference_asset):
+        return self.portfolio[asset_to_track] / self.portfolio[reference_asset]
+
 
     def target_function(self, *, delta_assets: dict = {}) -> float:
         '''
@@ -162,7 +174,7 @@ class AMM(ABC):
         try:
             for keys in fees:
                 assert keys in self.fees, f"Fee symbol {keys} is not legit."
-                self.fees[keys] += fees[keys] # update fee portfolio
+                self.fees[keys] += fees[keys]# update fee portfolio
         except AssertionError as info:
             return False, {'error_info': info}
         return True, {}
@@ -183,7 +195,9 @@ class AMM(ABC):
     
     def _quote_pre_fee(self, s1: str, s2: str, s2_in: float) -> Tuple[float, Dict]:  
         # assert fee_asset in (s1, s2), f"Illegal fee asset: {fee_asset} for transaction between {s1} and {s2}."
-        
+        '''
+        Calculate the fee in unit of s2
+        '''
         fee_dict = self.fee_structure.calculate_fee({s1: None, s2: s2_in}, s2, amm = self)
         actual_s2_in = s2_in - fee_dict[s2]
         
@@ -193,11 +207,15 @@ class AMM(ABC):
         return s1_in, info 
     
     def _quote_post_fee(self, s1: str, s2: str, s2_in: float) -> Tuple[float, Dict]:  
+        '''
+        Calculate the fee in unit of s1
+        
+        actual_s1_in=(s1_in+s1_fee)->amm->s2_in
+        '''
 
         s1_in, info = self._quote_no_fee(s1, s2, s2_in)
         
         fee_dict = self.fee_structure.calculate_fee({s1: s1_in, s2: s2_in}, s1, amm = self)
-        
         actual_s1_in = s1_in + fee_dict[s1]
         
         info.update({'asset_delta': {s1: s1_in, s2: s2_in}, 'fee': fee_dict})
@@ -217,10 +235,13 @@ class AMM(ABC):
     def quote(self, s1: str, s2: str, s2_in: float) -> Tuple[float, Dict]:     
         is_liquidity_event = ('L' in (s1, s2))
         if not is_liquidity_event: # swap
-            if s2_in >= 0: 
-                return self._quote_pre_fee(s1, s2, s2_in)
-            else:
+            # if s2_in >= 0 and False: 
+            #     return self._quote_pre_fee(s1, s2, s2_in)
+            # else:
+            if self.fee_precharge:
                 return self._quote_post_fee(s1, s2, s2_in)
+            else:
+                return self._quote_pre_fee(s1, s2, s2_in)
         else:
             return self._quote_no_fee(s1, s2, s2_in)
             
@@ -229,22 +250,27 @@ class AMM(ABC):
         '''
         The function should only do swaps.
         '''
-        
         if 'L' in (s1, s2):
             return False, {'error_info': f"Cannot update liqudity tokens using 'trade_swap'."}
-        
-        return self._trade(s1, s2, s2_in)
+        self.lock.acquire()
+        ret = self._trade(s1, s2, s2_in)
+        self.lock.release()
+        return ret
         
     def trade_liquidity(self, s1: str, s2: str, s2_in: float, lp_user: str) -> Tuple[bool, Dict]:
         '''
         The function allows the registered LP users
         to trade liquidity tokens. 
         '''
+        
         if 'L' not in (s1, s2):
             return False, {'error_info': f"Must trade liquidity tokens using 'trade_liquidity'."}
         if lp_user not in self.lp_tokens: 
             return False, {'error_info': f"Non-registered LP user: {lp_user}."}
-        return self._trade(s1, s2, s2_in)
+        self.lock.acquire()
+        ret = self._trade(s1, s2, s2_in)
+        self.lock.release()
+        return ret
     
     @abstractmethod
     def _trade(self, s1: str, s2: str, s2_in: float) -> Tuple[bool, Dict]:

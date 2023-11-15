@@ -28,6 +28,7 @@ class PercentFee(BaseFee):
             # self.fees[asset] += fee_delta
         return fee_dict
     
+    
 class NoFee(PercentFee):
     def __init__(self) -> None:
         super().__init__(0.0)

@@ -66,9 +66,9 @@ def set_market_trade(amm, MP: float, inv1: str, inv2: str) -> None:
     
     inventory_2 = amm.portfolio[inv2]
     
-    ratio = inventory_1 / inventory_2
+    ratio = inventory_1 / inventory_2 # not use the ratio, quote for the effective price and fees. 
 
-    if ratio > MP:
+    if ratio > MP: # also consider fees for liquidation in market, can assume a fix percentage fee for now 
         y = math.sqrt(inventory_1 * inventory_2/MP) - inventory_2
         amm.trade_swap(inv1,inv2,y)
         #print(f"This is your trade to execute: {inv2} {inv1} {y}")

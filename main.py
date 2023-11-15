@@ -8,7 +8,8 @@ def main():
     fee2 = TriangleFee({1: 0.3, 100: 0.05, 500: 0.005, 1000: 0.0005, 10000: 0.00005})
     
     # amm = AMM()
-    amm = SimpleFeeAMM(fee_structure=fee1)
+    amm = SimpleFeeAMM(fee_structure=fee1,
+                       fee_precharge=False)
 
     print("Initial AMM: ")
     print(amm)

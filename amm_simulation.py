@@ -3,6 +3,10 @@ from utils import parse_input, set_market_trade
 from fee import TriangleFee, PercentFee
 from threading import Thread
 import numpy as np
+import time
+
+import wandb
+
 
 # Function for brownian motion
 def brownian_motion(initial_price, drift, volatility, time_steps):
@@ -60,6 +64,110 @@ def main():
 
         print("Updated portfolio:")
         print(amm)
+        
+        
+
+def run_gbm(initial_price, drift, volatility, time_steps):
+    dt = 0.5  # time step
+    prices = [initial_price]
+
+    for _ in range(time_steps):
+        # Generate a random movement
+        random_movement = np.random.normal(0, np.sqrt(dt)) * volatility
+
+        # Update price using Brownian motion formula
+        new_price = prices[-1] + prices[-1]*(drift * dt + random_movement)
+        yield new_price
+
+
+    
+def main2():
+    config_dict = {"fee_structure": "percent",
+              "fee_scheme": "simple",
+              "initial_price": 10,
+              "drift": 0.1,
+              "volatility": 0.1,
+              "time_steps": 200,
+              "num_agents": 4}
+    use_wandb = True
+    
+
+    
+    config = wandb.config
+    if config_dict['fee_structure'] == 'percent':
+        fee = PercentFee(0.01)
+    elif config_dict['fee_structure'] == 'triangle':
+        fee = TriangleFee({1: 0.3, 100: 0.05, 500: 0.005, 1000: 0.0005, 10000: 0.00005})
+        
+    else: 
+        raise
+    amm = SimpleFeeAMM(fee_structure=fee)
+    
+    # Initialize Brownian motion parameters
+    initial_price = config_dict['initial_price']
+    drift = config_dict['drift']
+    volatility = config_dict['volatility']
+    time_steps = config_dict['time_steps']
+    # market_prices = brownian_motion(initial_price, drift, volatility, time_steps)
+
+    market_prices = [float(initial_price)]
+    
+    if use_wandb:
+        wandb.init(config=config_dict, 
+            project="amm_simulation")
+    
+    
+    recall = False
+    
+    def market_price_thread(initial_price, drift, volatility, time_steps, market_prices):
+
+        for price in run_gbm(initial_price, drift, volatility, time_steps):
+            market_prices.append(price)
+            time.sleep(0.5)
+            
+    def arbitrage_thread(amm, market_prices):
+        while not recall:
+            curr_MP = market_prices[-1]
+            set_market_trade(amm, curr_MP, "B", "A")
+            time.sleep(2)
+            
+    def observer_thread(amm, market_prices):
+        while not recall:
+            curr_MP = market_prices[-1]
+            wandb.log({"AMM Price": amm.asset_ratio("B", "A"), "Market Price": curr_MP})
+            time.sleep(1)
+    
+    threads = []
+    for _ in range(config_dict['num_agents']):
+        threads.append(Thread(target=arbitrage_thread, args=(amm, market_prices)))
+        
+    threads.append(Thread(target=market_price_thread, args=(initial_price, drift, volatility, time_steps, market_prices)))
+    threads.append(Thread(target=observer_thread, args=(amm, market_prices)))
+
+    for t in threads:
+        t.start()
+
+    print("Initial AMM:")
+    print(amm)
+    
+    threads[-2].join()
+    recall = True
+    
+    for t in threads:
+        t.join(timeout = 0.1)
+    
+    if use_wandb:
+        wandb.finish()
+    
+    
+    
+    
+
+        
+
 
 if __name__ == "__main__":
-    main()
+    main2()
+
+    # for p in run_gbm(10, 0.1, 0.1, 10000):
+    #     print(p)
