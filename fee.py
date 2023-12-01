@@ -60,14 +60,15 @@ class TriangleFee(BaseFee):
             asset_out, info = amm._quote_no_fee(
                 receive_asset, fee_asset, transaction_dict[fee_asset])
             # define integrand
-            print("receive", receive_asset, "out", asset_out)
+            print("initial receive", receive_asset,
+                  "out amount:", abs(asset_out))
             print("info", info)
 
             def _tri_integrand(w, x, y, f, m):
                 return f + m * (((x * y) / (x - w)**2) - (y / x))
             # get fee
-            fee, error = quad(_tri_integrand, 0, asset_out, args=(
-                amm.portfolio[receive_asset], amm.portfolio[fee_asset], 
+            fee, error = quad(_tri_integrand, 0, abs(asset_out), args=(
+                amm.portfolio[receive_asset], amm.portfolio[fee_asset],
                 self.max_fee, self.fee_slope))
             print("FEE:", fee)
             # charge fee based on shift

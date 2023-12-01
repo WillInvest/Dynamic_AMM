@@ -7,7 +7,6 @@ from utils import add_dict, FeeDict, distribute_fees, add_lp_tokens
 
 from typing import Tuple, Dict, Callable, Literal
 from abc import ABC, abstractmethod
-from threading import Lock
 
 
 # Define class AMM
@@ -25,18 +24,11 @@ class AMM(ABC):
                  initial_fee_portfolio: Dict[str, float] = None,
                  ratio_denomination: str = "None",
                  fee_structure: BaseFee = None,
-                 fee_precharge: bool = True,
                  solver: Literal['bisec'] = 'bisec') -> None:
 
         if utility_func == "constant_product":
             self.utility_func = ConstantProduct(token_symbol='L')
-<<<<<<< HEAD
-            
-        self.fee_precharge = fee_precharge
-        
-=======
 
->>>>>>> 0222cca (updated triangle fee and passed amm through fee calls so can solve within triangle -- its currently producing negative fees, so i am in the process of figuring out where in the integral calculation this is arising or if its as simple as abs() the output)
         # Set solver
         if solver == 'bisec':
             self.solver = find_root_bisection
@@ -82,13 +74,7 @@ class AMM(ABC):
         self.portfolio['L'] = num_l
 
         self.lp_tokens = {'initial': num_l}
-<<<<<<< HEAD
-        
-        self.lock = Lock()
-        
-=======
 
->>>>>>> 0222cca (updated triangle fee and passed amm through fee calls so can solve within triangle -- its currently producing negative fees, so i am in the process of figuring out where in the integral calculation this is arising or if its as simple as abs() the output)
     def curr_utility(self) -> float:
         return self.utility_func.U(self.portfolio)
 
@@ -113,8 +99,6 @@ class AMM(ABC):
         for fee in self.fees:
             ret += f"F{fee}: {self.fees[fee]}\n"
         ret += '-' * 20 + '\n'
-        ret += f"Utility: {self.curr_utility()}\n"
-        ret += '-' * 20 + '\n'
         return ret
 
     def track_asset_ratio(self, asset_to_track, reference_asset):
@@ -122,10 +106,6 @@ class AMM(ABC):
             self.portfolio[asset_to_track] / self.portfolio[reference_asset])
         self.BfA.append(
             self.portfolio[reference_asset] / self.portfolio[asset_to_track])
-    
-    def asset_ratio(self, asset_to_track, reference_asset):
-        return self.portfolio[asset_to_track] / self.portfolio[reference_asset]
-
 
     def target_function(self, *, delta_assets: dict = {}) -> float:
         '''
@@ -183,11 +163,7 @@ class AMM(ABC):
         try:
             for keys in fees:
                 assert keys in self.fees, f"Fee symbol {keys} is not legit."
-<<<<<<< HEAD
-                self.fees[keys] += fees[keys]# update fee portfolio
-=======
                 self.fees[keys] += fees[keys]  # update fee portfolio
->>>>>>> 0222cca (updated triangle fee and passed amm through fee calls so can solve within triangle -- its currently producing negative fees, so i am in the process of figuring out where in the integral calculation this is arising or if its as simple as abs() the output)
         except AssertionError as info:
             return False, {'error_info': info}
         return True, {}
@@ -206,35 +182,13 @@ class AMM(ABC):
 
     def _quote_pre_fee(self, s1: str, s2: str, s2_in: float) -> Tuple[float, Dict]:
         # assert fee_asset in (s1, s2), f"Illegal fee asset: {fee_asset} for transaction between {s1} and {s2}."
-<<<<<<< HEAD
-        '''
-        Calculate the fee in unit of s2
-        '''
-        fee_dict = self.fee_structure.calculate_fee({s1: None, s2: s2_in}, s2, amm = self)
-=======
 
         fee_dict = self.fee_structure.calculate_fee(
             {s1: None, s2: s2_in}, s2, portfolio=self.portfolio, amm=self)
->>>>>>> 0222cca (updated triangle fee and passed amm through fee calls so can solve within triangle -- its currently producing negative fees, so i am in the process of figuring out where in the integral calculation this is arising or if its as simple as abs() the output)
         actual_s2_in = s2_in - fee_dict[s2]
 
         s1_in, info = self._quote_no_fee(s1, s2, actual_s2_in)
 
-<<<<<<< HEAD
-        info.update({'asset_delta': {s1: s1_in, s2: actual_s2_in}, 'fee': fee_dict})
-        return s1_in, info 
-    
-    def _quote_post_fee(self, s1: str, s2: str, s2_in: float) -> Tuple[float, Dict]:  
-        '''
-        Calculate the fee in unit of s1
-        
-        actual_s1_in=(s1_in+s1_fee)->amm->s2_in
-        '''
-
-        s1_in, info = self._quote_no_fee(s1, s2, s2_in)
-        
-        fee_dict = self.fee_structure.calculate_fee({s1: s1_in, s2: s2_in}, s1, amm = self)
-=======
         info.update(
             {'asset_delta': {s1: s1_in, s2: actual_s2_in}, 'fee': fee_dict})
         return s1_in, info
@@ -246,14 +200,10 @@ class AMM(ABC):
         fee_dict = self.fee_structure.calculate_fee(
             {s1: s1_in, s2: s2_in}, s1, portfolio=self.portfolio, amm=self)
 
->>>>>>> 0222cca (updated triangle fee and passed amm through fee calls so can solve within triangle -- its currently producing negative fees, so i am in the process of figuring out where in the integral calculation this is arising or if its as simple as abs() the output)
         actual_s1_in = s1_in + fee_dict[s1]
 
         info.update({'asset_delta': {s1: s1_in, s2: s2_in}, 'fee': fee_dict})
         return actual_s1_in, info
-
-# asset_out, _ = amm._quote_no_fee(
-#                 receive_asset, fee_asset, transaction_dict[fee_asset])
 
     def _quote_no_fee(self, s1: str, s2: str, s2_in: float) -> Tuple[float, Dict]:
         # assert fee_asset in (s1, s2), f"Illegal fee asset: {fee_asset} for transaction between {s1} and {s2}."
@@ -268,21 +218,11 @@ class AMM(ABC):
 
     def quote(self, s1: str, s2: str, s2_in: float) -> Tuple[float, Dict]:
         is_liquidity_event = ('L' in (s1, s2))
-<<<<<<< HEAD
-        if not is_liquidity_event: # swap
-            # if s2_in >= 0 and False: 
-            #     return self._quote_pre_fee(s1, s2, s2_in)
-            # else:
-            if self.fee_precharge:
-=======
         if not is_liquidity_event:  # swap
             if s2_in >= 0:
                 return self._quote_pre_fee(s1, s2, s2_in)
             else:
->>>>>>> 0222cca (updated triangle fee and passed amm through fee calls so can solve within triangle -- its currently producing negative fees, so i am in the process of figuring out where in the integral calculation this is arising or if its as simple as abs() the output)
                 return self._quote_post_fee(s1, s2, s2_in)
-            else:
-                return self._quote_pre_fee(s1, s2, s2_in)
         else:
             return self._quote_no_fee(s1, s2, s2_in)
 
@@ -290,42 +230,23 @@ class AMM(ABC):
         '''
         The function should only do swaps.
         '''
-<<<<<<< HEAD
-        if 'L' in (s1, s2):
-            return False, {'error_info': f"Cannot update liqudity tokens using 'trade_swap'."}
-        self.lock.acquire()
-        ret = self._trade(s1, s2, s2_in)
-        self.lock.release()
-        return ret
-        
-=======
 
         if 'L' in (s1, s2):
             return False, {'error_info': f"Cannot update liqudity tokens using 'trade_swap'."}
 
         return self._trade(s1, s2, s2_in)
 
->>>>>>> 0222cca (updated triangle fee and passed amm through fee calls so can solve within triangle -- its currently producing negative fees, so i am in the process of figuring out where in the integral calculation this is arising or if its as simple as abs() the output)
     def trade_liquidity(self, s1: str, s2: str, s2_in: float, lp_user: str) -> Tuple[bool, Dict]:
         '''
         The function allows the registered LP users
         to trade liquidity tokens. 
         '''
-        
         if 'L' not in (s1, s2):
             return False, {'error_info': f"Must trade liquidity tokens using 'trade_liquidity'."}
         if lp_user not in self.lp_tokens:
             return False, {'error_info': f"Non-registered LP user: {lp_user}."}
-<<<<<<< HEAD
-        self.lock.acquire()
-        ret = self._trade(s1, s2, s2_in)
-        self.lock.release()
-        return ret
-    
-=======
         return self._trade(s1, s2, s2_in)
 
->>>>>>> 0222cca (updated triangle fee and passed amm through fee calls so can solve within triangle -- its currently producing negative fees, so i am in the process of figuring out where in the integral calculation this is arising or if its as simple as abs() the output)
     @abstractmethod
     def _trade(self, s1: str, s2: str, s2_in: float) -> Tuple[bool, Dict]:
         raise NotImplementedError
@@ -338,18 +259,11 @@ class SimpleFeeAMM(AMM):
         )) == 0, f"Must claim fees before registering a new liquidity provider."
         return super().register_lp(user)
 
-        #     succ, info = amm.trade_swap(s1, s2, s2_in)
-        # if succ:
-        #     print(f"User pay {s1}: {info['pay_s1']}")
-
     def _trade(self, s1: str, s2: str, s2_in: float) -> Tuple[bool, Dict]:
         s1_in, info = self.quote(s1, s2, s2_in)
         info['pay_s1'] = s1_in
         fees = info['fee']
         updates = info['asset_delta']
-
-        print("_trade", s1_in, info)
-
         success1, update_info1 = self.update_portfolio(
             delta_assets=updates, check=True)
 
@@ -360,7 +274,6 @@ class SimpleFeeAMM(AMM):
         success2, update_info2 = self.update_fee(fees)
         info["update_info_fee"] = update_info2
 
-        print("_trade", success1, success2, info)
         return success2, info
 
     def trade_liquidity(self, s1: str, s2: str, s2_in: float, lp_user: str) -> Tuple[bool, Dict]:

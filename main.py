@@ -10,12 +10,7 @@ def main():
     fee2 = TriangleFee(0.2, -1)
 
     # amm = AMM()
-<<<<<<< HEAD
-    amm = SimpleFeeAMM(fee_structure=fee1,
-                       fee_precharge=False)
-=======
     amm = SimpleFeeAMM(fee_structure=fee2)
->>>>>>> 061ec67 (updated changes with triangle fee - going to pull from main and migrate code)
 
     print("Initial AMM: ")
     print(amm)
