@@ -67,7 +67,8 @@ class TriangleFee(BaseFee):
                 return f + m * (((x * y) / (x - w)**2) - (y / x))
             # get fee
             fee, error = quad(_tri_integrand, 0, asset_out, args=(
-                amm.portfolio[receive_asset], amm.portfolio[fee_asset], self.max_fee, self.fee_slope))
+                amm.portfolio[receive_asset], amm.portfolio[fee_asset], 
+                self.max_fee, self.fee_slope))
             print("FEE:", fee)
             # charge fee based on shift
             # # i think getting fee from dict is unnecessary but for sake of consistency

@@ -262,11 +262,18 @@ class SimpleFeeAMM(AMM):
         )) == 0, f"Must claim fees before registering a new liquidity provider."
         return super().register_lp(user)
 
+        #     succ, info = amm.trade_swap(s1, s2, s2_in)
+        # if succ:
+        #     print(f"User pay {s1}: {info['pay_s1']}")
+
     def _trade(self, s1: str, s2: str, s2_in: float) -> Tuple[bool, Dict]:
         s1_in, info = self.quote(s1, s2, s2_in)
         info['pay_s1'] = s1_in
         fees = info['fee']
         updates = info['asset_delta']
+
+        print("_trade", s1_in, info)
+
         success1, update_info1 = self.update_portfolio(
             delta_assets=updates, check=True)
 
@@ -277,6 +284,7 @@ class SimpleFeeAMM(AMM):
         success2, update_info2 = self.update_fee(fees)
         info["update_info_fee"] = update_info2
 
+        print("_trade", success1, success2, info)
         return success2, info
 
     def trade_liquidity(self, s1: str, s2: str, s2_in: float, lp_user: str) -> Tuple[bool, Dict]:
