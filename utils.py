@@ -1,6 +1,6 @@
 from typing import Dict
 import math
-
+import time
 
 def parse_input(string: str):
     results = string.split(" ")
@@ -61,22 +61,27 @@ def add_lp_tokens(lp_tokens: dict, num_tokens: float) -> None:
             
         
 
-def set_market_trade(amm, MP: float, inv1: str, inv2: str) -> None:
-    inventory_1 = amm.portfolio[inv1]
-    
-    inventory_2 = amm.portfolio[inv2]
-    
-    ratio = inventory_1 / inventory_2 # not use the ratio, quote for the effective price and fees. 
+def set_market_trade(amm, MP: float, invB: str, invA: str) -> None:    
+    # inventory_B = amm.portfolio[invB]
+    # inventory_A = amm.portfolio[invA]
 
-    if ratio > MP: # also consider fees for liquidation in market, can assume a fix percentage fee for now 
-        y = math.sqrt(inventory_1 * inventory_2/MP) - inventory_2
-        amm.trade_swap(inv1,inv2,y)
-        #print(f"This is your trade to execute: {inv2} {inv1} {y}")
+    current_B_Price_wfee, info = amm._quote_post_fee('B','A',1)
+    # print("B's MP per 1 stock of A is: ",abs(current_B_Price_wfee))
+
+    if abs(current_B_Price_wfee) < MP:
+        # sim_order = -0.1
+        sim_order = 1
+        #we are gonna execute small orders until the Price of B to A is returned to the MP
+        while abs(current_B_Price_wfee) < MP:
+            # amm.trade_swap(invB,invA,sim_order)
+            amm.trade_swap(invA,invB,sim_order)
+            current_B_Price_wfee, info = amm._quote_post_fee('B','A',1)
+            # print("Inside Price",abs(current_B_Price_wfee))
+            # print("INv A",amm.portfolio[invA])
+            # print("INv b",amm.portfolio[invB])
         
-    elif ratio < MP:
-        x = math.sqrt(MP * inventory_1 *inventory_2) - inventory_1
-        
-        amm.trade_swap(inv2,inv1,x)
-        #print(f"This is your trade to execute: {inv1} {inv2} {x}")
+    #At this point we must have over valued B
+    # current_B_Price_wfee, info = amm._quote_post_fee('B','A',1)
+    # print("B's MP(After thread) per 1 stock of A is: ",abs(current_B_Price_wfee))
 
         

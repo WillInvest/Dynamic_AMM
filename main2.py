@@ -3,6 +3,7 @@ from amm import SimpleFeeAMM
 from utils import parse_input, set_market_trade
 from fee import TriangleFee, PercentFee
 from threading import Thread
+import time 
 ## Function to execute in the setup thread
 def set_trade_after_execution(amm_instance, MP, inv1, inv2):
     # Define the function to run after trade execution
@@ -15,6 +16,8 @@ def main():
     print("Initial AMM: ")
     print(SimpleFeeAMM)
     # while True:
+    # current_B_Price_wfee, info = amm._quote_post_fee('B','A',1)
+    # print("B's MP before: ",abs(current_B_Price_wfee))
     for i in range(100000):
         s2string = input("Input string (i.e. A B 1): ")
         if s2string == 'r':
@@ -24,9 +27,14 @@ def main():
             continue  # reset
         order = parse_input(s2string)
         s1, s2, s2_in = order
-        print(order)
+        print("The submitted order is :",order)
         ##amm.track_asset_ratio('A','B')
         success, trade_info = amm.trade_swap(s1, s2, s2_in)
+        print("Half portfolio:")
+        print(amm)
+        # current_B_Price_wfee, info = amm._quote_post_fee('B','A',1)
+        # print("B's MP after trade: ",abs(current_B_Price_wfee))
+        time.sleep(2)
         if success:
             t = Thread(target=set_trade_after_execution,args = (amm,10,'B','A'))
             t.start()
@@ -42,6 +50,7 @@ def main():
         # print(f"s1_in: {s1_in}")
         # updates = {s1: s1_in, s2: s2_in}
         # amm.update_portfolio(delta_assets=updates, asset_in=s2, fee='triangle')
+        time.sleep(3)
         print("Updated portfolio:")
         print(amm)
 #     def update_portfolio(self, *, delta_assets: dict = {}, check=True, asset_in: str = None, fee=None):
