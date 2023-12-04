@@ -66,22 +66,36 @@ def set_market_trade(amm, MP: float, invB: str, invA: str) -> None:
     # inventory_A = amm.portfolio[invA]
 
     current_B_Price_wfee, info = amm._quote_post_fee('B','A',1)
-    # print("B's MP per 1 stock of A is: ",abs(current_B_Price_wfee))
+    print("B's MP per 1 stock of A is: ",abs(current_B_Price_wfee))
 
     if abs(current_B_Price_wfee) < MP:
         # sim_order = -0.1
         sim_order = 1
+        count=0
         #we are gonna execute small orders until the Price of B to A is returned to the MP
         while abs(current_B_Price_wfee) < MP:
             # amm.trade_swap(invB,invA,sim_order)
             amm.trade_swap(invA,invB,sim_order)
             current_B_Price_wfee, info = amm._quote_post_fee('B','A',1)
+            count+=1
             # print("Inside Price",abs(current_B_Price_wfee))
             # print("INv A",amm.portfolio[invA])
             # print("INv b",amm.portfolio[invB])
-        
+        print("THe number of times the loop was run is:",count)
+  
+    elif abs(current_B_Price_wfee) > MP:
+            # sim_order = -0.1
+            sim_order = -1
+            gcount=0
+            #we are gonna execute small orders until the Price of B to A is returned to the MP
+            while abs(current_B_Price_wfee) > MP:
+                # amm.trade_swap(invB,invA,sim_order)
+                gcount+=1
+                amm.trade_swap(invA,invB,sim_order)
+                current_B_Price_wfee, info = amm._quote_post_fee('B','A',1)
+            print("THe number of times the gloop was run is:",gcount)
     #At this point we must have over valued B
-    # current_B_Price_wfee, info = amm._quote_post_fee('B','A',1)
-    # print("B's MP(After thread) per 1 stock of A is: ",abs(current_B_Price_wfee))
+    current_B_Price_wfee, info = amm._quote_post_fee('B','A',1)
+    print("B's MP(After thread) per 1 stock of A is: ",abs(current_B_Price_wfee))
 
         
