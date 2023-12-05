@@ -30,7 +30,7 @@ def main():
         print("The submitted order is :",order)
         ##amm.track_asset_ratio('A','B')
         success, trade_info = amm.trade_swap(s1, s2, s2_in)
-        print("Half portfolio:")
+        print("After Trade Portfolio:")
         print(amm)
         # current_B_Price_wfee, info = amm._quote_post_fee('B','A',1)
         # print("B's MP after trade: ",abs(current_B_Price_wfee))
@@ -51,7 +51,7 @@ def main():
         # updates = {s1: s1_in, s2: s2_in}
         # amm.update_portfolio(delta_assets=updates, asset_in=s2, fee='triangle')
         time.sleep(3)
-        print("Updated portfolio:")
+        print("After Price Manipulation Portfolio:")
         print(amm)
 #     def update_portfolio(self, *, delta_assets: dict = {}, check=True, asset_in: str = None, fee=None):
 if __name__ == "__main__":

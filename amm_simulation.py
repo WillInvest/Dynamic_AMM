@@ -89,7 +89,7 @@ def main2():
               "volatility": 0.1,
               "time_steps": 200,
               "num_agents": 4}
-    use_wandb = True
+    use_wandb = False
     
 
     
