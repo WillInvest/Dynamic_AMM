@@ -36,5 +36,3 @@ htmlcov
 
 wandb/
 
-plotter.py
-amm_simulation.py

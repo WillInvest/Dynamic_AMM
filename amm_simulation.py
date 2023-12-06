@@ -4,6 +4,7 @@ from fee import TriangleFee, PercentFee
 from threading import Thread
 import numpy as np
 import time
+import matplotlib.pyplot as plt
 
 import wandb
 
@@ -82,7 +83,7 @@ def run_gbm(initial_price, drift, volatility, time_steps):
 
     
 def main2():
-    config_dict = {"fee_structure": "",
+    config_dict = {"fee_structure": "triangle",
               "fee_scheme": "simple",
               "initial_price": 10,
               "drift": 0.1,
@@ -118,7 +119,8 @@ def main2():
     
     
     recall = False
-    open = []
+    open_AMMPrices = []
+    open_MarketPrices = []
     
     def market_price_thread(initial_price, drift, volatility, time_steps, market_prices):
 
@@ -136,7 +138,8 @@ def main2():
         while not recall:
             curr_MP = market_prices[-1]
             # wandb.log({"AMM Price": amm.asset_ratio("B", "A"), "Market Price": curr_MP})
-            open.append([amm.asset_ratio("B", "A"), curr_MP])
+            open_AMMPrices.append(amm.asset_ratio("B", "A"))
+            open_MarketPrices.append(curr_MP)
             time.sleep(1)
     
     threads = []
@@ -158,18 +161,30 @@ def main2():
     for t in threads:
         t.join(timeout = 0.1)
     
-    print("Price in AMM ","| Current Market Price")
-    for i in open:
-        print(i[0],"   |   ",i[1])
+
     
     if use_wandb:
         wandb.finish()
     
-    
-    
-    
+    Amm_price = open_AMMPrices
+    Market_price = open_MarketPrices
 
-        
+    # Example price arrays (replace these with your actual price data)
+    price_array_1 = Amm_price
+    price_array_2 = Market_price
+
+    # Plotting the price arrays
+    plt.plot(price_array_1, label='AMM Prices ')
+    plt.plot(price_array_2, label='Market Prices')
+
+    # Adding labels, title, and legend
+    plt.xlabel('Time')
+    plt.ylabel('Prices')
+    plt.title('Arbitrage Plot (With Fee)')
+    plt.legend()
+
+    # Display the plot
+    plt.show()
 
 
 if __name__ == "__main__":
@@ -177,3 +192,4 @@ if __name__ == "__main__":
 
     # for p in run_gbm(10, 0.1, 0.1, 10000):
     #     print(p)
+
