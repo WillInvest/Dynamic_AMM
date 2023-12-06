@@ -66,7 +66,14 @@ def set_market_trade(amm, MP: float, invB: str, invA: str) -> None:
     # inventory_A = amm.portfolio[invA]
 
     arbitFolio = {}
-    current_B_Price_wfee, info = amm._quote_post_fee('B','A',1)
+    fee_ = "Fee"
+    current_B_Price_wfee = 0
+    if hasattr(amm.fee_structure, 'fee_percent') and amm.fee_structure.fee_percent== 0.0:
+        fee_ = "No Fee"
+        current_B_Price_wfee, info = amm._quote_no_fee('B','A',1)
+    else:
+        fee_ = "Fee"
+        current_B_Price_wfee, info = amm._quote_post_fee('B','A',1)
     # print("B's MP per 1 stock of A is: ",abs(current_B_Price_wfee))
 
     if abs(current_B_Price_wfee) < MP:
@@ -88,7 +95,10 @@ def set_market_trade(amm, MP: float, invB: str, invA: str) -> None:
                 sim_order=0
             arbitFolio[invA] -= temp
             arbitFolio[invB] -= sim_order
-            current_B_Price_wfee, info = amm._quote_post_fee('B','A',1)
+            if fee_ == "No Fee":
+                current_B_Price_wfee, info = amm._quote_no_fee('B','A',1)
+            else:
+                current_B_Price_wfee, info = amm._quote_post_fee('B','A',1)
             count+=1
             # print("Inside Price",abs(current_B_Price_wfee))
             # print("INv A",amm.portfolio[invA])
@@ -113,11 +123,17 @@ def set_market_trade(amm, MP: float, invB: str, invA: str) -> None:
                 sim_order=0
             arbitFolio[invA] -= temp
             arbitFolio[invB] -= sim_order
-            current_B_Price_wfee, info = amm._quote_post_fee('B','A',1)
+            if fee_ == "No Fee":
+                current_B_Price_wfee, info = amm._quote_no_fee('B','A',1)
+            else:
+                current_B_Price_wfee, info = amm._quote_post_fee('B','A',1)
             gcount+=1
         # print("THe number of times the gloop was run is:",gcount)
     #At this point we must have over valued B
-    # current_B_Price_wfee, info = amm._quote_post_fee('B','A',1)
+    # if fee_ == "No Fee":
+    #     current_B_Price_wfee, info = amm._quote_no_fee('B','A',1)
+    # else:
+    #     current_B_Price_wfee, info = amm._quote_post_fee('B','A',1)
     # print("B's MP(After thread) per 1 stock of A is: ",abs(current_B_Price_wfee))
     # print("THe arbitrage agent;s portfolio is:",arbitFolio)
 

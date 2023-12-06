@@ -82,25 +82,25 @@ def run_gbm(initial_price, drift, volatility, time_steps):
 
     
 def main2():
-    config_dict = {"fee_structure": "percent",
+    config_dict = {"fee_structure": "",
               "fee_scheme": "simple",
               "initial_price": 10,
               "drift": 0.1,
               "volatility": 0.1,
               "time_steps": 200,
               "num_agents": 4}
+    # 
     use_wandb = False
     
 
     
-    config = wandb.config
+    # config = wandb.config
     if config_dict['fee_structure'] == 'percent':
         fee = PercentFee(0.01)
     elif config_dict['fee_structure'] == 'triangle':
-        fee = TriangleFee({1: 0.3, 100: 0.05, 500: 0.005, 1000: 0.0005, 10000: 0.00005})
-        
+        fee = TriangleFee({1: 0.3, 100: 0.05, 500: 0.005, 1000: 0.0005, 10000: 0.00005})   
     else: 
-        raise
+        fee = None  #When it's None it will automatically choose the noFee() function 
     amm = SimpleFeeAMM(fee_structure=fee)
     
     # Initialize Brownian motion parameters
@@ -118,6 +118,7 @@ def main2():
     
     
     recall = False
+    open = []
     
     def market_price_thread(initial_price, drift, volatility, time_steps, market_prices):
 
@@ -134,7 +135,8 @@ def main2():
     def observer_thread(amm, market_prices):
         while not recall:
             curr_MP = market_prices[-1]
-            wandb.log({"AMM Price": amm.asset_ratio("B", "A"), "Market Price": curr_MP})
+            # wandb.log({"AMM Price": amm.asset_ratio("B", "A"), "Market Price": curr_MP})
+            open.append([amm.asset_ratio("B", "A"), curr_MP])
             time.sleep(1)
     
     threads = []
@@ -155,6 +157,10 @@ def main2():
     
     for t in threads:
         t.join(timeout = 0.1)
+    
+    print("Price in AMM ","| Current Market Price")
+    for i in open:
+        print(i[0],"   |   ",i[1])
     
     if use_wandb:
         wandb.finish()

@@ -35,3 +35,6 @@ pip-delete-this-directory.txt
 htmlcov
 
 wandb/
+
+plotter.py
+amm_simulation.py
