@@ -28,6 +28,7 @@ def main():
         # print(order)
         # amm.track_asset_ratio('A','B')
         succ, info = amm.trade_swap(s1, s2, s2_in)
+        
         if succ:
             print(f"User pay {s1}: {info['pay_s1']}")
         else:

@@ -1,7 +1,7 @@
 import numpy as np
 from solver import find_root_bisection
 import math
-from fee import NoFee, BaseFee
+from fee import NoFee, BaseFee, TriangleFee
 from utility_func import BaseUtility, ConstantProduct
 from utils import add_dict, FeeDict, distribute_fees, add_lp_tokens
 
@@ -219,6 +219,8 @@ class AMM(ABC):
     def quote(self, s1: str, s2: str, s2_in: float) -> Tuple[float, Dict]:
         is_liquidity_event = ('L' in (s1, s2))
         if not is_liquidity_event:  # swap
+            if self.fee_structure == TriangleFee():
+                return self._quote_post_fee(s1, s2, s2_in)
             if s2_in >= 0:
                 return self._quote_pre_fee(s1, s2, s2_in)
             else:
