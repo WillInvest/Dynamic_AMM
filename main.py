@@ -4,61 +4,53 @@ from fee import TriangleFee, PercentFee
 
 
 def main():
+    # initialize AMM w/ set fee structure
+    fee = TriangleFee(0.2, -1)  # PercentFee(0.01)
+    amm = SimpleFeeAMM(fee_structure=fee)
 
-    fee1 = PercentFee(0.01)
-    # fee2 = TriangleFee({1: 0.3, 100: 0.05, 500: 0.005, 1000: 0.0005, 10000: 0.00005})
-    fee2 = TriangleFee(0.2, -1)
-
-    # amm = AMM()
-    amm = SimpleFeeAMM(fee_structure=fee2)
-
+    # print initial AMM
     print("Initial AMM: ")
     print(amm)
+
+    # receive trade input
     # while True:
     for i in range(100000):
         print()
-        s2string = input("Input string (i.e. A B 1): ")
+        s2string = input("Input string 'Out In In#' (i.e. A B 1): ")
+        # check for amm reset
         if s2string == 'r':
             amm = AMM()
             print("Reset amm")
             print(amm)
             continue  # reset
+
+        # parse input
         order = parse_input(s2string)
-        s1, s2, s2_in = order
-        # print(order)
-        # amm.track_asset_ratio('A','B')
-        succ, info = amm.trade_swap(s1, s2, s2_in)
-        
+        asset_out, asset_in, asset_in_amt = order
+
+        # call swap function
+        succ, info = amm.trade_swap(asset_out, asset_in, asset_in_amt)
+
+        # print trade info
         if succ:
-            print(f"User pay {s1}: {info['pay_s1']}")
+            print("--------------------")
+            print(f"Successful Swap {asset_in} for {asset_out}")
+            print(
+                f"{asset_in_amt} {asset_in} ---> {abs(info['asset_delta'][asset_out]+info['fee'][asset_out])} {asset_out}")
+            print(f"Fee charge {info['fee'][asset_out]} {asset_out}")
+            print("--------------------")
+        #     print(f"User pays {asset_in_amt} {asset_in}")
+        #     print(f"Swap value: {abs(info['asset_delta'][asset_out])}")
+        #     print(
+        #         f"User gets {abs(info['asset_delta'][asset_out]+info['fee'][asset_out])}{asset_out}")
+        #     print(f"User fee {info['fee'][asset_out]}{asset_out}")
         else:
-            print(f"unsuccessful trade: {info}")
-
-        # Function call for resetting ratio to market value
-        # Parameter 1: Market Value
-        # Parameter 2: Numerator for asset ratio eg: (B(parameter 2)/A(parameter 3))
-        # amm.set_market_trade(10,'B','A')
-
-        # function_to_solve = amm.helper_gen(s1, s2, s2_in)
-
-        # s1_in, info = find_root_bisection(
-        #     function_to_solve, left_bound=-amm.portfolio[s1] + 1)
-        # print('solver info')
-        # print(info)
-        # print(f"s1_in: {s1_in}")
-        # updates = {s1: s1_in, s2: s2_in}
-        # amm.update_portfolio(delta_assets=updates, asset_in=s2, fee='triangle')
+            print(f"Unsuccessful trade: {info}")
+        # print updated AMM
         print("Updated portfolio:")
         print(amm)
         print()
-#     def update_portfolio(self, *, delta_assets: dict = {}, check=True, asset_in: str = None, fee=None):
 
 
 if __name__ == "__main__":
-    # amm = AMM()
-    # print(amm)
-    # print(amm.target_function())
-    # amm.update_portfolio(delta_assets={'A': -1, 'B': 0.1})
-    # print(amm)
-    # print(amm.target_function())
     main()

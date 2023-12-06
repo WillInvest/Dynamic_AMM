@@ -44,65 +44,27 @@ class TriangleFee(BaseFee):
         self.max_fee = max_fee
         self.fee_slope = fee_slope
 
-    def calculate_fee(self, transaction_dict: Dict[str, float], fee_asset: str, **kwargs) -> dict:
+    def calculate_fee(self, transaction_dict: Dict[str, float], asset_out: str, asset_in: str, **kwargs) -> dict:
         # ensure portfolio is defined
         amm = kwargs.get("amm")
         assert amm is not None, "AMM must be defined for triangle fee."
         # ensure fee asset is in transaction
-        assert fee_asset in transaction_dict, f"Fee asset has to be one of the assets in the transaction."
+        assert asset_in in transaction_dict, f"Fee asset has to be one of the assets in the transaction."
         fee_dict = {}
-        if fee_asset != "L":
-            # use transaction dict to get asset quantities
-            transact_keys = list(transaction_dict.keys())
-            receive_asset = [
-                asset for asset in transact_keys if asset != fee_asset][0]
+        if asset_in != "L":
             # get delta x to set upper limit
-            asset_out, info = amm._quote_no_fee(
-                receive_asset, fee_asset, transaction_dict[fee_asset])
-            # define integrand
-            print("initial receive", receive_asset,
-                  "out amount:", abs(asset_out))
-            print("info", info)
+            asset_out_amt, info = amm.quote(
+                asset_out, asset_in, transaction_dict[asset_in])
+            # define triangle integrand
 
             def _tri_integrand(w, x, y, f, m):
                 return f + m * (((x * y) / (x - w)**2) - (y / x))
             # get fee
-            fee, error = quad(_tri_integrand, 0, abs(asset_out), args=(
-                amm.portfolio[receive_asset], amm.portfolio[fee_asset],
+            # function, lower bound, upper bound, args
+            fee, error = quad(_tri_integrand, 0, abs(asset_out_amt), args=(
+                amm.portfolio[asset_out], amm.portfolio[asset_in],
                 self.max_fee, self.fee_slope))
-            print("FEE:", fee)
-            # charge fee based on shift
-            # # i think getting fee from dict is unnecessary but for sake of consistency
-            fee_dict[fee_asset] = fee  # fee_dict.get(fee_asset, 0.) + fee
+            # save fee
+            fee_dict[asset_out] = fee
+        # return fee
         return fee_dict
-
-    # def calculate_fee(self, transaction_dict: dict, fee_asset: str, **kwargs) -> dict:
-
-    #     fee_dict = {}
-    #     if fee_asset != "L": # TODO: logic for "L"
-    #         # These values can be changed, simply here to test if it works
-    #         # Also implementation can be easily changed, again just testing
-    #         # bracket_fees = {0.1: (100, 0.01), 0.2: (200, 0.02), 0.3: (300, 0.03)}
-    #         # keep track of change coming in
-    #         tracker = float(transaction_dict[fee_asset]) # TODO for nagative transaction_dict[fee_asset]
-    #         try:
-    #             while tracker > 0.0:
-    #                 for amount, fee in self.bracket_fees.items():
-    #                     fee_delta = min(amount, tracker) * fee
-    #                     # Charge fee based on size/remaining size of order
-    #                     fee_dict[fee_asset] = fee_dict.get(fee_asset, 0.) +  fee_delta
-    #                     # Update fee assets
-    #                     # print("HERE1:",
-    #                     #       fee_delta, fee_assets[asset])
-    #                     # self.fees[fee_asset] += fee_delta
-    #                     # print("HERE2", fee_assets[asset])
-    #                     tracker -= amount  # Reduce delta remaining by how much we have already assessed fees
-    #                     if tracker < 1e-10:  # You can adjust the epsilon value as needed
-    #                         break
-    #         # catch any errors - added bcs not sure if theres edge case whole in the above logic
-    #         except Exception as e:
-    #             print(f"Assertion Error: {e}")
-
-        # return updated changes dicitonary
-        # print(transaction_dict[fee_asset])
-        # return fee_dict
