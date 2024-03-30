@@ -57,11 +57,12 @@ class TriangleFee(BaseFee):
             # ASK SEAN TO COMMENT THIS
             delta_val = ((Y + delta_y) / (X - max(base_fee, delta_x))) - (Y / X) # change in value of asset-in
             end_fee = max([(min_fee), (base_fee + (slope * delta_val))]) # calculate fee
-            if end_fee != min_fee: fee_dict[fee_asset] = ((base_fee + end_fee) / 2)  # return fee if not min fee
+            if end_fee != min_fee: 
+                fee_dict[fee_asset] = ((base_fee + end_fee) / 2)   # return fee if not min fee
+                return fee_dict # return fee info
             excess_change = (min_fee - (base_fee + (slope * delta_val)))
             total = base_fee - min_fee + excess_change
             fee_dict[fee_asset] =  ((((base_fee + min_fee) / 2) * ((base_fee - min_fee) / total)) + (min_fee * (excess_change / total)))
-        # return fee
-        return fee_dict
+        return fee_dict # return fee info
 
 
