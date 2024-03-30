@@ -33,3 +33,6 @@ pip-delete-this-directory.txt
 
 # Unit test / coverage reports
 htmlcov
+
+# local api keys
+api_key
