@@ -66,7 +66,7 @@ def sim1():
         # iterate over each time step in btc price path
         for t, trade in enumerate(btc):
             
-        
+            print("")
         
         
         
