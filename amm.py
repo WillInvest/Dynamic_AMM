@@ -25,7 +25,7 @@ class AMM(ABC):
                  initial_fee_portfolio: Dict[str, float] = None, 
                  ratio_denomination: str = "None",
                  fee_structure: BaseFee = None,
-                 fee_precharge: bool = True,
+                 fee_precharge: bool = False,
                  solver: Literal['bisec'] = 'bisec') -> None:
         
         if utility_func == "constant_product":

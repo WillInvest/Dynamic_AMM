@@ -60,6 +60,30 @@ def add_lp_tokens(lp_tokens: dict, num_tokens: float) -> None:
         lp_tokens[lp_user] += (lp_tokens[lp_user]/sum_tokens)*num_tokens
             
         
+def set_acc_market_trade(amm, MP: float, invB: str, invA: str) -> None:
+    arbitFolio = {}
+    fee_ = "Fee"
+    current_B_Price_wfee = 0
+    if hasattr(amm.fee_structure, 'fee_percent') and amm.fee_structure.fee_percent== 0.0:
+        fee_ = "No Fee"
+        current_B_Price_wfee, info = amm._quote_no_fee('B','A',1)
+    else:
+        fee_ = "Fee"
+        current_B_Price_wfee, info = amm._quote_post_fee('B','A',1)
+
+    if abs(current_B_Price_wfee) < MP:
+        k2 = amm.portfolio[invA] - math.sqrt((amm.portfolio[invB]*amm.portfolio[invA])/MP)
+    
+    print(f'K2 value is : {k2}')
+    if k2<0:
+        k2 = k2*(-1)
+    current_B_Price_wfee, info = amm._quote_post_fee('B','A',1)
+    print("B's MP before arbitrage trade: ",abs(current_B_Price_wfee))
+    amm.fee_precharge = True
+    success,temp = amm.trade_swap(invB,invA,-k2)
+    amm.fee_precharge = False
+    current_B_Price_wfee, info = amm._quote_post_fee('B','A',1)
+    print("B's MP after arbitrage trade: ",abs(current_B_Price_wfee))
 
 def set_market_trade(amm, MP: float, invB: str, invA: str) -> None:    
     # inventory_B = amm.portfolio[invB]

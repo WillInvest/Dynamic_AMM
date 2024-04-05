@@ -20,7 +20,7 @@ class PercentFee(BaseFee):
         assert fee_asset in transaction_dict, f"Fee asset has to be one of the assets in the transaction."  
         fee_dict = {}
         if fee_asset != "L":
-            # Apply fixed percetn fee for buying asset
+            # Apply fixed percent fee for buying asset
             fee_delta = abs(transaction_dict[fee_asset]) * self.fee_percent
             # Charge fee based on size of order
             fee_dict[fee_asset] = fee_dict.get(fee_asset, 0.) + fee_delta

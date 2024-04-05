@@ -83,13 +83,13 @@ def run_gbm(initial_price, drift, volatility, time_steps):
 
     
 def main2():
-    config_dict = {"fee_structure": "triangle",
+    config_dict = {"fee_structure": "",
               "fee_scheme": "simple",
               "initial_price": 10,
               "drift": 0.1,
               "volatility": 0.1,
               "time_steps": 200,
-              "num_agents": 4}
+              "num_agents": 1}
     # 
     use_wandb = False
     
@@ -180,7 +180,7 @@ def main2():
     # Adding labels, title, and legend
     plt.xlabel('Time')
     plt.ylabel('Prices')
-    plt.title('Arbitrage Plot (With Fee)')
+    plt.title('Arbitrage Plot (With No Fee)')
     plt.legend()
 
     # Display the plot
