@@ -1,7 +1,11 @@
+# importing src directory
+import sys
+sys.path.append('..')
+# experiment imports
 from amm import AMM
 from amm import SimpleFeeAMM
-from utils import parse_input, set_market_trade
-from fee import TriangleFee, PercentFee
+from amm.utils import parse_input, set_market_trade
+from amm.fee import TriangleFee, PercentFee
 from threading import Thread
 # Function to execute in the setup thread
 

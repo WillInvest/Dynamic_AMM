@@ -5,13 +5,6 @@ from random import random
 import numpy as np
 
 
-def experiment1():
-    print("here")
-
-# def main():
-#     experiment1()
-
-
 
 
 
