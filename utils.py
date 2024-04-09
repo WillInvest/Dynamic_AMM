@@ -66,38 +66,46 @@ def set_acc_market_trade(amm, MP: float, invB: str, invA: str) -> None:
     current_B_Price_wfee = 0
     if hasattr(amm.fee_structure, 'fee_percent') and amm.fee_structure.fee_percent== 0.0:
         fee_ = "No Fee"
-        current_B_Price_wfee, info = amm._quote_no_fee('B','A',1)
+        current_B_Price_wfee, info = amm._quote_no_fee(invB,invA,1)
     else:
         fee_ = "Fee"
-        current_B_Price_wfee, info = amm._quote_post_fee('B','A',1)
+        current_B_Price_wfee, info = amm._quote_post_fee(invB,invA,1)
 
     if abs(current_B_Price_wfee) < MP:
         k2 = amm.portfolio[invA] - math.sqrt((amm.portfolio[invB]*amm.portfolio[invA])/MP)
-    
-    print(f'K2 value is : {k2}')
-    if k2<0:
-        k2 = k2*(-1)
-    current_B_Price_wfee, info = amm._quote_post_fee('B','A',1)
-    print("B's MP before arbitrage trade: ",abs(current_B_Price_wfee))
-    amm.fee_precharge = True
-    success,temp = amm.trade_swap(invB,invA,-k2)
-    amm.fee_precharge = False
-    current_B_Price_wfee, info = amm._quote_post_fee('B','A',1)
-    print("B's MP after arbitrage trade: ",abs(current_B_Price_wfee))
+        print(f'K2 value is : {abs(k2)}')
+        if k2<0:
+            k2 = k2*(-1)
+        current_B_Price_wfee, info = amm._quote_post_fee(invB,invA,1)
+        print("B's MP before arbitrage trade: ",abs(current_B_Price_wfee))
+        amm.fee_precharge = True
+        success,temp = amm.trade_swap(invB,invA,-k2)
+        amm.fee_precharge = False
+        current_B_Price_wfee, info = amm._quote_post_fee(invB,invA,1)
+        print("B's MP after arbitrage trade: ",abs(current_B_Price_wfee))
+    if abs(current_B_Price_wfee) > MP:
+        k2 = amm.portfolio[invB] - math.sqrt(amm.portfolio[invB]*amm.portfolio[invA]*MP)
+        print(f'K2 value is : {abs(k2)}')
+        if k2<0:
+            k2 = k2*(-1)
+        current_B_Price_wfee, info = amm._quote_post_fee(invB,invA,1)
+        print("B's MP before arbitrage trade: ",abs(current_B_Price_wfee))
+        amm.fee_precharge = True
+        success,temp = amm.trade_swap(invA,invB,-k2)
+        amm.fee_precharge = False
+        current_B_Price_wfee, info = amm._quote_post_fee(invB,invA,1)
+        print("B's MP after arbitrage trade: ",abs(current_B_Price_wfee))
 
 def set_market_trade(amm, MP: float, invB: str, invA: str) -> None:    
-    # inventory_B = amm.portfolio[invB]
-    # inventory_A = amm.portfolio[invA]
-
     arbitFolio = {}
     fee_ = "Fee"
     current_B_Price_wfee = 0
     if hasattr(amm.fee_structure, 'fee_percent') and amm.fee_structure.fee_percent== 0.0:
         fee_ = "No Fee"
-        current_B_Price_wfee, info = amm._quote_no_fee('B','A',1)
+        current_B_Price_wfee, info = amm._quote_no_fee(invB,invA,1)
     else:
         fee_ = "Fee"
-        current_B_Price_wfee, info = amm._quote_post_fee('B','A',1)
+        current_B_Price_wfee, info = amm._quote_post_fee(invB,invA,1)
     # print("B's MP per 1 stock of A is: ",abs(current_B_Price_wfee))
 
     if abs(current_B_Price_wfee) < MP:
@@ -120,9 +128,9 @@ def set_market_trade(amm, MP: float, invB: str, invA: str) -> None:
             arbitFolio[invA] -= temp
             arbitFolio[invB] -= sim_order
             if fee_ == "No Fee":
-                current_B_Price_wfee, info = amm._quote_no_fee('B','A',1)
+                current_B_Price_wfee, info = amm._quote_no_fee(invB,invA,1)
             else:
-                current_B_Price_wfee, info = amm._quote_post_fee('B','A',1)
+                current_B_Price_wfee, info = amm._quote_post_fee(invB,invA,1)
             count+=1
             # print("Inside Price",abs(current_B_Price_wfee))
             # print("INv A",amm.portfolio[invA])
@@ -148,16 +156,16 @@ def set_market_trade(amm, MP: float, invB: str, invA: str) -> None:
             arbitFolio[invA] -= temp
             arbitFolio[invB] -= sim_order
             if fee_ == "No Fee":
-                current_B_Price_wfee, info = amm._quote_no_fee('B','A',1)
+                current_B_Price_wfee, info = amm._quote_no_fee(invB,invA,1)
             else:
-                current_B_Price_wfee, info = amm._quote_post_fee('B','A',1)
+                current_B_Price_wfee, info = amm._quote_post_fee(invB,invA,1)
             gcount+=1
         # print("THe number of times the gloop was run is:",gcount)
     #At this point we must have over valued B
     # if fee_ == "No Fee":
-    #     current_B_Price_wfee, info = amm._quote_no_fee('B','A',1)
+    #     current_B_Price_wfee, info = amm._quote_no_fee(invB,invA,1)
     # else:
-    #     current_B_Price_wfee, info = amm._quote_post_fee('B','A',1)
+    #     current_B_Price_wfee, info = amm._quote_post_fee(invB,invA,1)
     # print("B's MP(After thread) per 1 stock of A is: ",abs(current_B_Price_wfee))
     # print("THe arbitrage agent;s portfolio is:",arbitFolio)
 

@@ -36,7 +36,7 @@ def main():
         # print("B's MP after trade: ",abs(current_B_Price_wfee))
         time.sleep(2)
         if success:
-            t = Thread(target=set_trade_after_execution,args = (amm,9.5,'B','A'))
+            t = Thread(target=set_trade_after_execution,args = (amm,20,'B','A'))    #This is where the MP are input as an argumen
             t.start()
         #Function call for resetting ratio to market value
         #Parameter 1: Market Value
