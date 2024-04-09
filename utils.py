@@ -1,6 +1,6 @@
 from typing import Dict
 import math
-
+import time
 
 def parse_input(string: str):
     results = string.split(" ")
@@ -60,23 +60,116 @@ def add_lp_tokens(lp_tokens: dict, num_tokens: float) -> None:
         lp_tokens[lp_user] += (lp_tokens[lp_user]/sum_tokens)*num_tokens
             
         
+def set_acc_market_trade(amm, MP: float, invB: str, invA: str) -> None:
+    arbitFolio = {}
+    fee_ = "Fee"
+    current_B_Price_wfee = 0
+    if hasattr(amm.fee_structure, 'fee_percent') and amm.fee_structure.fee_percent== 0.0:
+        fee_ = "No Fee"
+        current_B_Price_wfee, info = amm._quote_no_fee(invB,invA,1)
+    else:
+        fee_ = "Fee"
+        current_B_Price_wfee, info = amm._quote_post_fee(invB,invA,1)
 
-def set_market_trade(amm, MP: float, inv1: str, inv2: str) -> None:
-    inventory_1 = amm.portfolio[inv1]
-    
-    inventory_2 = amm.portfolio[inv2]
-    
-    ratio = inventory_1 / inventory_2 # not use the ratio, quote for the effective price and fees. 
+    if abs(current_B_Price_wfee) < MP:
+        k2 = amm.portfolio[invA] - math.sqrt((amm.portfolio[invB]*amm.portfolio[invA])/MP)
+        print(f'K2 value is : {abs(k2)}')
+        if k2<0:
+            k2 = k2*(-1)
+        current_B_Price_wfee, info = amm._quote_post_fee(invB,invA,1)
+        print("B's MP before arbitrage trade: ",abs(current_B_Price_wfee))
+        amm.fee_precharge = True
+        success,temp = amm.trade_swap(invB,invA,-k2)
+        amm.fee_precharge = False
+        current_B_Price_wfee, info = amm._quote_post_fee(invB,invA,1)
+        print("B's MP after arbitrage trade: ",abs(current_B_Price_wfee))
+    if abs(current_B_Price_wfee) > MP:
+        k2 = amm.portfolio[invB] - math.sqrt(amm.portfolio[invB]*amm.portfolio[invA]*MP)
+        print(f'K2 value is : {abs(k2)}')
+        if k2<0:
+            k2 = k2*(-1)
+        current_B_Price_wfee, info = amm._quote_post_fee(invB,invA,1)
+        print("B's MP before arbitrage trade: ",abs(current_B_Price_wfee))
+        amm.fee_precharge = True
+        success,temp = amm.trade_swap(invA,invB,-k2)
+        amm.fee_precharge = False
+        current_B_Price_wfee, info = amm._quote_post_fee(invB,invA,1)
+        print("B's MP after arbitrage trade: ",abs(current_B_Price_wfee))
 
-    if ratio > MP: # also consider fees for liquidation in market, can assume a fix percentage fee for now 
-        y = math.sqrt(inventory_1 * inventory_2/MP) - inventory_2
-        amm.trade_swap(inv1,inv2,y)
-        #print(f"This is your trade to execute: {inv2} {inv1} {y}")
-        
-    elif ratio < MP:
-        x = math.sqrt(MP * inventory_1 *inventory_2) - inventory_1
-        
-        amm.trade_swap(inv2,inv1,x)
-        #print(f"This is your trade to execute: {inv1} {inv2} {x}")
+def set_market_trade(amm, MP: float, invB: str, invA: str) -> None:    
+    arbitFolio = {}
+    fee_ = "Fee"
+    current_B_Price_wfee = 0
+    if hasattr(amm.fee_structure, 'fee_percent') and amm.fee_structure.fee_percent== 0.0:
+        fee_ = "No Fee"
+        current_B_Price_wfee, info = amm._quote_no_fee(invB,invA,1)
+    else:
+        fee_ = "Fee"
+        current_B_Price_wfee, info = amm._quote_post_fee(invB,invA,1)
+    # print("B's MP per 1 stock of A is: ",abs(current_B_Price_wfee))
+
+    if abs(current_B_Price_wfee) < MP:
+        # sim_order = -0.1
+        sim_order = 1
+        count=0
+        arbitFolio[invB]= 0
+        arbitFolio[invA]= 0
+
+        #we are gonna execute small orders until the Price of B to A is returned to the MP
+        while abs(current_B_Price_wfee) < MP:
+            # amm.trade_swap(invB,invA,sim_order)
+            sim_order = 1
+            success,temp = amm.trade_swap(invA,invB,sim_order)
+            if success:
+                temp = temp['pay_s1']
+            else:
+                temp=0
+                sim_order=0
+            arbitFolio[invA] -= temp
+            arbitFolio[invB] -= sim_order
+            if fee_ == "No Fee":
+                current_B_Price_wfee, info = amm._quote_no_fee(invB,invA,1)
+            else:
+                current_B_Price_wfee, info = amm._quote_post_fee(invB,invA,1)
+            count+=1
+            # print("Inside Price",abs(current_B_Price_wfee))
+            # print("INv A",amm.portfolio[invA])
+            # print("INv b",amm.portfolio[invB])
+        # print("THe number of times the loop was run is:",count)
+  
+    elif abs(current_B_Price_wfee) > MP:
+        # sim_order = -0.1
+        sim_order = -1
+        gcount=0
+        arbitFolio[invB]= 0
+        arbitFolio[invA]= 0
+        #we are gonna execute small orders until the Price of B to A is returned to the MP
+        while abs(current_B_Price_wfee) > MP:
+            # amm.trade_swap(invB,invA,sim_order)
+            sim_order = -1
+            success,temp = amm.trade_swap(invA,invB,sim_order)
+            if success:
+                temp = temp['pay_s1']
+            else:
+                temp=0
+                sim_order=0
+            arbitFolio[invA] -= temp
+            arbitFolio[invB] -= sim_order
+            if fee_ == "No Fee":
+                current_B_Price_wfee, info = amm._quote_no_fee(invB,invA,1)
+            else:
+                current_B_Price_wfee, info = amm._quote_post_fee(invB,invA,1)
+            gcount+=1
+        # print("THe number of times the gloop was run is:",gcount)
+    #At this point we must have over valued B
+    # if fee_ == "No Fee":
+    #     current_B_Price_wfee, info = amm._quote_no_fee(invB,invA,1)
+    # else:
+    #     current_B_Price_wfee, info = amm._quote_post_fee(invB,invA,1)
+    # print("B's MP(After thread) per 1 stock of A is: ",abs(current_B_Price_wfee))
+    # print("THe arbitrage agent;s portfolio is:",arbitFolio)
+
+
+    #Just have to add the code so as to see if the market is profitable or not 
 
         

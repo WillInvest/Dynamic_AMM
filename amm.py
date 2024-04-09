@@ -25,7 +25,7 @@ class AMM(ABC):
                  initial_fee_portfolio: Dict[str, float] = None, 
                  ratio_denomination: str = "None",
                  fee_structure: BaseFee = None,
-                 fee_precharge: bool = True,
+                 fee_precharge: bool = False,
                  solver: Literal['bisec'] = 'bisec') -> None:
         
         if utility_func == "constant_product":
@@ -212,11 +212,13 @@ class AMM(ABC):
         
         actual_s1_in=(s1_in+s1_fee)->amm->s2_in
         '''
-
         s1_in, info = self._quote_no_fee(s1, s2, s2_in)
         
-        fee_dict = self.fee_structure.calculate_fee({s1: s1_in, s2: s2_in}, s1, amm = self)
-        actual_s1_in = s1_in + fee_dict[s1]
+        fee_dict = self.fee_structure.calculate_fee({s1: s1_in, s2: s2_in}, s1, amm = self) #fee is always positive
+        if s1_in <0 :
+            actual_s1_in = s1_in + fee_dict[s1]
+        else:
+            actual_s1_in = s1_in - fee_dict[s1]
         
         info.update({'asset_delta': {s1: s1_in, s2: s2_in}, 'fee': fee_dict})
         return actual_s1_in, info 
