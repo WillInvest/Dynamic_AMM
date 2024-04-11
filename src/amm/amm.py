@@ -289,7 +289,3 @@ class SimpleFeeAMM(AMM):
         self.fees.reset()
         return ret
 
-
-
-
-
