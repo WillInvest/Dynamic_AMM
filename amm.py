@@ -24,10 +24,7 @@ class AMM(ABC):
                  initial_fee_portfolio: Dict[str, float] = None,
                  ratio_denomination: str = "None",
                  fee_structure: BaseFee = None,
-<<<<<<< HEAD
-=======
                  fee_precharge: bool = False,
->>>>>>> 203e3ccc5620951ca12280668deeef42d42d0e60
                  solver: Literal['bisec'] = 'bisec') -> None:
 
         if utility_func == "constant_product":
@@ -185,7 +182,6 @@ class AMM(ABC):
 
         return func
 
-<<<<<<< HEAD
     def quote(self, asset_out: str, asset_in: str, asset_in_amt: float) -> Tuple[float, Dict]:
         """
         This function just quotes the trade - it doesn't execute or calcualte fees.
@@ -199,56 +195,22 @@ class AMM(ABC):
         info = {'asset_delta': {asset_out: asset_out_amt,
                                 asset_in: asset_in_amt}, 'fee': {}}
         return asset_out_amt, info
-
+    
+    # if want to route to call on pre, post fee, or no fee
+    # def quote(self, s1: str, s2: str, s2_in: float) -> Tuple[float, Dict]:     
+    #     is_liquidity_event = ('L' in (s1, s2))
+    #     if not is_liquidity_event: # swap
+    #         # if s2_in >= 0 and False: 
+    #         #     return self._quote_pre_fee(s1, s2, s2_in)
+    #         # else:
+    #         if self.fee_precharge:
+    #             return self._quote_post_fee(s1, s2, s2_in)
+    #         else:
+    #             return self._quote_pre_fee(s1, s2, s2_in)
+    #     else:
+    #         return self._quote_no_fee(s1, s2, s2_in)
+    
     def trade_swap(self, asset_out: str, asset_in: str, asset_in_amt: float) -> Tuple[bool, Dict]:
-=======
-        info.update({'asset_delta': {s1: s1_in, s2: actual_s2_in}, 'fee': fee_dict})
-        return s1_in, info 
-    
-    def _quote_post_fee(self, s1: str, s2: str, s2_in: float) -> Tuple[float, Dict]:  
-        '''
-        Calculate the fee in unit of s1
-        
-        actual_s1_in=(s1_in+s1_fee)->amm->s2_in
-        '''
-        s1_in, info = self._quote_no_fee(s1, s2, s2_in)
-        
-        fee_dict = self.fee_structure.calculate_fee({s1: s1_in, s2: s2_in}, s1, amm = self) #fee is always positive
-        if s1_in <0 :
-            actual_s1_in = s1_in + fee_dict[s1]
-        else:
-            actual_s1_in = s1_in - fee_dict[s1]
-        
-        info.update({'asset_delta': {s1: s1_in, s2: s2_in}, 'fee': fee_dict})
-        return actual_s1_in, info 
-    
-    def _quote_no_fee(self, s1: str, s2: str, s2_in: float) -> Tuple[float, Dict]:  
-        # assert fee_asset in (s1, s2), f"Illegal fee asset: {fee_asset} for transaction between {s1} and {s2}."
-            
-        function_to_solve = self.helper_gen(s1, s2, s2_in)
-
-        s1_in, _ = self.solver(
-            function_to_solve, left_bound=-self.portfolio[s1] + 1)
-
-        info = {'asset_delta': {s1: s1_in, s2: s2_in}, 'fee': {}}
-        return s1_in, info 
-    
-    def quote(self, s1: str, s2: str, s2_in: float) -> Tuple[float, Dict]:     
-        is_liquidity_event = ('L' in (s1, s2))
-        if not is_liquidity_event: # swap
-            # if s2_in >= 0 and False: 
-            #     return self._quote_pre_fee(s1, s2, s2_in)
-            # else:
-            if self.fee_precharge:
-                return self._quote_post_fee(s1, s2, s2_in)
-            else:
-                return self._quote_pre_fee(s1, s2, s2_in)
-        else:
-            return self._quote_no_fee(s1, s2, s2_in)
-            
-    
-    def trade_swap(self, s1: str, s2: str, s2_in: float) -> Tuple[bool, Dict]:
->>>>>>> 203e3ccc5620951ca12280668deeef42d42d0e60
         '''
         The function should only do swaps.
         '''
@@ -258,6 +220,36 @@ class AMM(ABC):
         # call internal trade function
         return self._trade(asset_out, asset_in, asset_in_amt)
 
+    
+    # def _quote_post_fee(self, s1: str, s2: str, s2_in: float) -> Tuple[float, Dict]:  
+    #     '''
+    #     Calculate the fee in unit of s1
+        
+    #     actual_s1_in=(s1_in+s1_fee)->amm->s2_in
+    #     '''
+    #     s1_in, info = self._quote_no_fee(s1, s2, s2_in)
+        
+    #     fee_dict = self.fee_structure.calculate_fee({s1: s1_in, s2: s2_in}, s1, amm = self) #fee is always positive
+    #     if s1_in <0 :
+    #         actual_s1_in = s1_in + fee_dict[s1]
+    #     else:
+    #         actual_s1_in = s1_in - fee_dict[s1]
+        
+    #     info.update({'asset_delta': {s1: s1_in, s2: s2_in}, 'fee': fee_dict})
+    #     return actual_s1_in, info 
+    
+    # def _quote_no_fee(self, s1: str, s2: str, s2_in: float) -> Tuple[float, Dict]:  
+    #     # assert fee_asset in (s1, s2), f"Illegal fee asset: {fee_asset} for transaction between {s1} and {s2}."
+            
+    #     function_to_solve = self.helper_gen(s1, s2, s2_in)
+
+    #     s1_in, _ = self.solver(
+    #         function_to_solve, left_bound=-self.portfolio[s1] + 1)
+
+    #     info = {'asset_delta': {s1: s1_in, s2: s2_in}, 'fee': {}}
+    #     return s1_in, info 
+    
+    
     def trade_liquidity(self, asset_out: str, asset_in: str, asset_in_amt: float, lp_user: str) -> Tuple[bool, Dict]:
         '''
         The function allows the registered LP users to trade liquidity tokens. 
