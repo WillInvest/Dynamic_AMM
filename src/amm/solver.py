@@ -1,3 +1,7 @@
+# importing src directory
+import sys
+sys.path.append('..')
+# library imports
 import numpy as np
 
 def find_root_bisection(func, *, 

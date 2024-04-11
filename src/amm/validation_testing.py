@@ -1,3 +1,4 @@
+# library imports
 import numpy as np
 
 
@@ -5,7 +6,7 @@ import numpy as np
 class AMM:
 
     # Initalize default values of A and B in portfolio
-    default_init_portfolio = {'A': 1000.0, 'B': 10000.0, "L": None}
+    default_init_portfolio = {'A': 10000.0, 'B': 10000.0, "L": None}
     fee_init_portfolio = {'A': 0.0, 'B': 0.0, "L": 0.0}
 
     # Create a new AMM object
@@ -112,6 +113,9 @@ class AMM:
 #                 elif fee == 'triangle':
 #                     new_amount = self.triangle_fee(delta_assets, self.fees, asset_in, {
 #                         1: 0.3, 100: 0.05, 500: 0.005, 1000: 0.0005, 10000: 0.00005})
+
+
+#### ???
 
     def percent_fee(self, delta_assets: dict, asset: str, fee: float):  # fee_assets: dict,
         if asset != "L":

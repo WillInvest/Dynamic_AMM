@@ -36,3 +36,6 @@ htmlcov
 
 wandb/
 
+
+# local api keys
+api_key
