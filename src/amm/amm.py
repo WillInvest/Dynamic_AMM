@@ -1,3 +1,6 @@
+# importing src directory
+import sys
+sys.path.append('..')
 # general libraries
 import numpy as np
 import pandas as pd
@@ -5,10 +8,10 @@ import math
 from typing import Tuple, Dict, Callable, Literal
 from abc import ABC, abstractmethod
 # project libraries
-from solver import find_root_bisection
-from fee import NoFee, BaseFee
-from utility_func import BaseUtility, ConstantProduct
-from utils import add_dict, FeeDict, distribute_fees, add_lp_tokens
+from amm.solver import find_root_bisection
+from amm.fee import NoFee, BaseFee
+from amm.utility_func import BaseUtility, ConstantProduct
+from amm.utils import add_dict, FeeDict, distribute_fees, add_lp_tokens
 
 # ABSTRACT CLASS
 class AMM(ABC):

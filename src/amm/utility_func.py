@@ -1,8 +1,14 @@
+# importing src directory
+import sys
+sys.path.append('..')
+# library imports
 from abc import ABC, abstractmethod
-import numpy as np
-from solver import find_root_bisection
-
 from typing import Dict
+import numpy as np
+# project imports
+from amm.solver import find_root_bisection
+
+
 
 CAL_ERROR_THRESHOLD = 1e-10
 

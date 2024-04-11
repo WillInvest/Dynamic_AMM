@@ -77,6 +77,9 @@ def sim1(n, asset, start_dt, end_dt, frequency):
         # store pairs of amm & df for updating
         amms = [(nofeeAMM, nofeeDF), (percentAMM, percentDF), (triAMM, triDF)]
         # create market df
+
+
+        
         marketDF = pd.DataFrame(columns=["amm_xr", "real_xr", "tracking", "A20", "B20", "A50", "B50", "A200", "B200"])
         
 

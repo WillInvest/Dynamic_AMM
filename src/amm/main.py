@@ -1,8 +1,11 @@
+# importing src directory
+import sys
+sys.path.append('..')
 # utility libraries
-from utils import parse_input
+from amm.utils import parse_input
 # project libraries
-from amm import AMM, SimpleFeeAMM
-from fee import TriangleFee, PercentFee, NoFee
+from amm.amm import AMM, SimpleFeeAMM
+from amm.fee import TriangleFee, PercentFee, NoFee
 
 
 

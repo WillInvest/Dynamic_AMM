@@ -1,3 +1,6 @@
+# importing src directory
+import sys
+sys.path.append('..')
 # library imports
 from abc import ABC, abstractmethod
 from typing import Literal, Dict

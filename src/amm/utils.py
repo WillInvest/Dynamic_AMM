@@ -1,3 +1,7 @@
+# importing src directory
+import sys
+sys.path.append('..')
+# library imports
 from typing import Dict
 import math
 
