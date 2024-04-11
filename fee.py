@@ -24,7 +24,7 @@ class PercentFee(BaseFee):
         assert fee_asset in transaction_dict, f"Fee asset has to be one of the assets in the transaction."
         fee_dict = {}
         if fee_asset != "L":
-            # Apply fixed percetn fee for buying asset
+            # Apply fixed percent fee for buying asset
             fee_delta = abs(transaction_dict[fee_asset]) * self.fee_percent
             # Charge fee based on size of order
             fee_dict[fee_asset] = fee_dict.get(fee_asset, 0.) + fee_delta
@@ -51,6 +51,7 @@ class TriangleFee(BaseFee):
         # ensure fee asset is in transaction
         assert asset_in in transaction_dict, f"Fee asset has to be one of the assets in the transaction."
         fee_dict = {}
+<<<<<<< HEAD
         if asset_in != "L":
             # get delta x to set upper limit
             asset_out_amt, info = amm.quote(
@@ -67,4 +68,32 @@ class TriangleFee(BaseFee):
             # save fee
             fee_dict[asset_out] = fee
         # return fee
+=======
+        fee_dict[fee_asset] = 0 
+        if fee_asset != "L": # TODO: logic for "L"
+            # These values can be changed, simply here to test if it works
+            # Also implementation can be easily changed, again just testing
+            # bracket_fees = {0.1: (100, 0.01), 0.2: (200, 0.02), 0.3: (300, 0.03)}
+            # keep track of change coming in
+            tracker = abs(float(transaction_dict[fee_asset])) # TODO for nagative transaction_dict[fee_asset]
+            try:
+                while tracker > 0.0:
+                    for amount, fee in self.bracket_fees.items():
+                        fee_delta = min(amount, tracker) * fee
+                        # Charge fee based on size/remaining size of order
+                        fee_dict[fee_asset] = fee_dict[fee_asset] +  fee_delta
+                        #print("The value of the fee asset is:",fee_dict[fee_asset])
+                        # Update fee assets
+                        # print("HERE1:",
+                        #       fee_delta, fee_assets[asset])
+                        # self.fees[fee_asset] += fee_delta
+                        # print("HERE2", fee_assets[asset])
+                        tracker -= amount  # Reduce delta remaining by how much we have already assessed fees
+                        if tracker < 1e-10:  # You can adjust the epsilon value as needed
+                            break
+            # catch any errors - added bcs not sure if theres edge case whole in the above logic
+            except Exception as e:
+                print(f"Assertion Error: {e}")
+        # return updated changes dicitonary
+>>>>>>> 203e3ccc5620951ca12280668deeef42d42d0e60
         return fee_dict
