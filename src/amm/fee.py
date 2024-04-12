@@ -57,7 +57,7 @@ class TriangleFee(BaseFee):
             delta_x = amm.portfolio[asset_out] - info['asset_delta'][asset_out] # change in asset out inventory
             delta_y = info['asset_delta'][asset_in] - amm.portfolio[asset_in] # change in asset in inventory
             base_fee, min_fee, slope, X, Y = 0.003, 0.0001, -1, amm.portfolio[asset_out], amm.portfolio[asset_in]
-            delta_val = ((Y + delta_y) / (X - max(base_fee, delta_x))) - (Y / X) # change in market value of asset-in relative to changes in the asset-out and base fee
+            delta_val = ((Y + delta_y) / (X - delta_x)) - (Y / X) # change in market value of asset-in relative to changes in the asset-out and base fee
             end_fee = max([(min_fee), (base_fee + (slope * delta_val))]) # calculate final fee based on the slope of the fee curve and delta value, ensuring it does not fall below the min fee
             if end_fee != min_fee: # check if fee is not min fee
                 fee_dict[fee_asset] = ((base_fee + end_fee) / 2) # return average of the base and end fees if not min fee
