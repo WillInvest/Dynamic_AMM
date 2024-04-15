@@ -17,6 +17,14 @@ from api_key.my_api_key import api_key
 
 
 
+
+def save_to_csv(data, filename):
+    # Directory is set inside the function to maintain encapsulation
+    directory = "/data/crypto_data/"
+    # os.makedirs(directory, exist_ok=True)  # Ensure directory exists
+    file_path = os.path.join(directory, filename)  # Construct the full file path
+    data.to_csv(file_path, index=False) 
+
 def fetch_data(api_key, pair, start_dt, end_dt, frequency):
     """
     get aggregated vwap data from Kaiko API
@@ -27,28 +35,20 @@ def fetch_data(api_key, pair, start_dt, end_dt, frequency):
     end_dt: str, the end time in ISO 8601 format
     exchange: str, exchange alias
     """
-    if os.path.exists(f'crypto_data/{pair}_{start_dt[0:10]}_{end_dt[0:10]}_{frequency}.csv'): # check if data already exists
-        data = pd.read_csv(f'crypto_data/{pair}_{start_dt[0:10]}_{end_dt[0:10]}_{frequency}.csv') # read data
-        return data # return data
+    filename = f'{pair}_{start_dt[0:10]}_{end_dt[0:10]}_{frequency}.csv' # define filename
+    if os.path.exists(filename): # check if data already exists
+        return pd.read_csv(filename) # read and return data
     url = f'https://us.market-api.kaiko.io/v2/data/trades.v1/exchanges/cbse/spot/{pair}/aggregations/vwap' # url for aggregated vwap (volume weighted average price)
     params = { 'start_time': start_dt, 'end_time': end_dt, 'interval': frequency, 'page_size': 100000, 'sort': 'asc'} # define request parameters
     headers = {'X-Api-Key': api_key,'Accept': 'application/json'} # define request headers 
     response = requests.get(url, headers=headers, params=params) # call kaiko request for data
     if response.status_code == 200: 
-        save_to_csv(response.json()['data'], pair, f'crypto_data/{pair}_{start_dt[0:10]}_{end_dt[0:10]}_{frequency}.csv') # save data to csv
-        return response.json()['data'] # if successful return data
+        data = pd.DataFrame(response.json()['data'])
+        data['timestamp'] = pd.to_datetime(data['timestamp'], unit='ms')
+        data['price'] = data['price'].astype(float)
+        # save_to_csv(data, filename) # save data to csv  # # NEED TO FIX # #
+        return data # if successful return data
     else: raise Exception(f'Failed to retrieve data for {pair}: {response.status_code}, {response.text}') # if failed raise exception
-
-def save_to_csv(data, pair, filename):
-    headers = ['pair', 'timestamp', 'price'] # define headers
-    with open(filename, 'w', newline='') as file: # open file for writing
-        writer = csv.writer(file) # create csv writer
-        writer.writerow(headers) # write headers
-        for row in data: # write data
-            timestamp = datetime.fromtimestamp(row.get('timestamp') / 1000).isoformat() if row.get('timestamp') else '' # get timestamp
-            writer.writerow([pair, timestamp, row.get('price', '')])  # write row
-    print(f'Data successfully saved to {filename}') # print success message
-
 
 def main():
     user_api_key = api_key
