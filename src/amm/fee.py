@@ -36,6 +36,26 @@ class NoFee(PercentFee):
     def __init__(self) -> None:
         super().__init__(0.0)
 
+class riskFee(BaseFee):
+    def __init__(self, base_fee: float) -> None:
+        super().__init__()
+        self.base_fee = base_fee
+# # TODO: FINISH B4 IMPLEMENTING
+    def calculate_fee(self, base_fee: float, transaction_dict: Dict[str, float], fee_asset: str, **kwargs) -> dict:
+        # ensure portfolio is defined
+        amm = kwargs.get("amm")
+        assert amm is not None, "AMM must be defined for triangle fee."
+        asset_out, asset_in = list(transaction_dict.keys())[0], list(transaction_dict.keys())[1] # get str for asset out and asset in
+        # ensure fee asset is in transaction
+        assert asset_in in transaction_dict, f"Fee asset has to be one of the assets in the transaction."
+        # find change in AMM market value
+        # mvalue_t0 = amm. # # TODO: HAVE HISTORY BE PART OF AMM SO CAN FEE BASED ON MARKET VALUE
+        fee_dict = {}
+        if asset_in != "L":
+            asset_out_n, info = amm._quote_no_fee(asset_out, asset_in, transaction_dict[asset_in]) # get delta x to set upper limit
+            
+        return 0
+
 # TRIANGLE FEE 
 class TriangleFee(BaseFee):
     def __init__(self, base_fee: float, min_fee: float, fee_slope: float) -> None:
