@@ -38,4 +38,6 @@ wandb/
 
 
 # local api keys
-api_key
+/api_key
+/src/data/crypto_data/
+/src/data/.DS_Store

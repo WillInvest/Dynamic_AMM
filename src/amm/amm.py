@@ -15,16 +15,19 @@ from amm.utils import add_dict, FeeDict, distribute_fees, add_lp_tokens
 
 # ABSTRACT CLASS
 class AMM(ABC):
-    # DEFAULT PORTFOLIO & FEE INVENTORY
+    # DEFAULT INVENTORY
     default_init_portfolio = {'A': 10000.0, 'B': 10000.0, "L": None}
     fee_init_portfolio = {'A': 0.0, 'B': 0.0, "L": 0.0}
+    # MARKET TRACKING
+    market_init_portfolio = {'A': None, 'B': None, "L": None}
 
     # INITIALIZING AMM
     def __init__(self, *,
                  utility_func: Literal["constant_product"] = "constant_product",
                  initial_portfolio: Dict[str, float] = None,
                  initial_fee_portfolio: Dict[str, float] = None,
-                 data: pd.DataFrame = None,
+                 market_init_portfolio: Dict[str, float] = None,
+                 market_data: pd.DataFrame = None,
                  fee_structure: BaseFee = None,
                  solver: Literal['bisec'] = 'bisec') -> None:
         
@@ -60,10 +63,17 @@ class AMM(ABC):
         # # create fee dictionary
         self.fees = FeeDict(self.fees)
 
+        # # set initial market portfolio if given
+        if market_init_portfolio:
+            self.market_data = market_init_portfolio
+        # # otherwise set to default
+        else:
+            self.market_data = self.market_init_portfolio.copy()
+
     # CREATE AMM DATA STORAGE
         # # define df to store AMM data
-        if data:
-            self.data = data
+        if market_data:
+            self.market_data = market_data
         # # if not given scheme, create new df w/ port & fee scheme
         else:
             columns = [key for key in self.portfolio] + [f"F_{key}" for key in self.fees]
@@ -72,25 +82,23 @@ class AMM(ABC):
     # INITIALIZE AMM DATA & LIQUIDITY TOKENS
         # # save number of assets (excluding L)
         self.num_assets = len(self.portfolio) - 1
-        # # use utility function initialize liquidity tokens minted
+        # # use utility function to initialize liquidity tokens minted
         init_num_lp = self.utility_func.cal_liquid_token_amount(self.portfolio)
         self.portfolio['L'] = init_num_lp
         # # create liquidity token info
         self.lp_tokens = {'initial': init_num_lp}
+        # # add LP users later if implementing (e.g. 'user_id': 1.0)
 
-# TBD 
     # ADD LIQUIDITY PROVIDER TO AMM
     def register_lp(self, user: str) -> None:
         '''
         register a liquidity provider w/ empty balance
         user: str - user id
         '''
-        if user in self.lp_tokens:
-            print(f"User {user} is already in LP list.")
-        else:
-            self.lp_tokens[user] = 0.
+        # add user to LP list if not already in
+        if user in self.lp_tokens: print(f"User {user} is already in LP list.")
+        else: self.lp_tokens[user] = 0.
 
-# TBD 
     # RETURN AMM STRING OUTPUT
     def __repr__(self) -> str:
         ret = '-' * 20 + '\n'
@@ -104,15 +112,13 @@ class AMM(ABC):
         ret += '-' * 20 + '\n'
         return ret
 
-
-# TBD 
     def target_function(self, *, delta_assets: dict = {}) -> float:
         '''
         calculate the target value with a change of inventories
         delta_assets: dict - change in assets (same format as portfolio)
         '''
         tmp_portfolio = self.portfolio.copy()
-        # Check for change in asset
+        # check for change in asset
         for asset in tmp_portfolio:
             tmp_portfolio[asset] += delta_assets.get(asset, 0.)
 
@@ -128,18 +134,8 @@ class AMM(ABC):
         # ----------------- end -------------------
         return np.exp(target) - 1.
 
-# TBD 
     def get_cummulative_fees(self) -> float:
-        total_fees = 0
-        for key, value in self.fees.items():
-            if key == 'L':
-                pass
-            elif key == self.denomination:
-                total_fees += value
-            else:
-                total_fees += (self.fees[key] /
-                               self.fees[self.denomination])
-        return total_fees
+        return self.fees
 
 # UPDATE AMM INVENTORY
     def update_portfolio(self, *, delta_assets: dict = {}, check: bool = True) -> Tuple[bool, dict]:
@@ -147,16 +143,22 @@ class AMM(ABC):
         Manually update portfolio, this may lead to a unbalanced portfolio. Take completed trade dictionary, delta_assets, and update the amm portfolio accordingly
         delta_assets: dict - trade dictionary
         check: 
+# TODO: figure out why it may be unbalanced and what check is
         '''
         if check:
             target = self.target_function(delta_assets=delta_assets) 
             assert abs(target) < 1e-8, f"Target: {target}"
         try:
-            for k in delta_assets: # for each asset in the swap
-                assert k in self.portfolio, k # check trade asset is in portfolio
-                temp_result = self.portfolio[k] + delta_assets[k] # temp store updated amm value & check
-                if temp_result <= 0.: return False, {"error_info": f"Value: resulting non-positive amount of {k}."} # check
-                self.portfolio[k] = temp_result # update portfolio value
+            # for each asset in the swap
+            for k in delta_assets:
+                # check trade asset is in portfolio
+                assert k in self.portfolio, k
+                # temp store updated amm value & check
+                temp_result = self.portfolio[k] + delta_assets[k]
+                # check for negative amount
+                if temp_result <= 0.: return False, {"error_info": f"Value: resulting non-positive amount of {k}."}
+                # update portfolio value
+                self.portfolio[k] = temp_result
         except AssertionError: return False, {"error_info": f"AssertionError: {k} not in {delta_assets}."}
         return True, {} # return success
 
@@ -232,6 +234,9 @@ class AMM(ABC):
         asset_in: str - asset to pay
         asset_in_n: float - amount of asset_in to pay (positive sign for paying fee on input asset, negative sign for paying fee on output asset)
         '''
+        if asset_in_n == 0.0:
+#NOTE added fee dict to this bcs _trade usually does, but sean didnt have so shouldnt create bug but just temp note here
+            return False, {'asset_delta': {"A": 0.0, "B": 0.0}, 'fee': {"FA": 0.0, "FB": 0.0}}
         if 'L' in (asset_out, asset_in): return False, {'error_info': f"Cannot update liqudity tokens using 'trade_swap'."}
         return self._trade(asset_out, asset_in, asset_in_n) # if not liquidity event, call trade function
 
