@@ -86,7 +86,7 @@ def calibrate_gbm(asset, data, frequency, T, N, type, show_all_results=False):
         if show_all_results:
             print(f'Estimated {asset} {frequency} Mu:', round(mu, 2), 'Estimated Annualized Mu:', round(mu * 365.25,2))
             print(f'Estimated {asset} {frequency} Sigma:', round(sigma, 2), 'Estimated Annualized Sigma:', round(sigma * 365.25**0.5, 2))
-        S0 = data.iloc[-1] # get LAST price in series
+        S0 = data.iloc[0] # NOTE get FIRST price in series 
         dt = T / N # time step size
         t = np.linspace(0, T, N)
         W = np.random.standard_normal(size=N)
@@ -103,7 +103,7 @@ def calibrate_gbm(asset, data, frequency, T, N, type, show_all_results=False):
         if show_all_results:
             print(f'Estimated {asset} {frequency} Mu:', round(result.x[0],5), 'Estimated Annualized Mu:', round(mu, 5)) # using 365.25 instead of 252 bcs operate 24/7
             print(f'Estimated {asset} {frequency} Sigma:', round(result.x[1],5), 'Estimated Annualized Sigma:', round(sigma, 5))
-        S0 = data.iloc[-1] # get LAST price in series
+        S0 = data.iloc[0] # get FIRST price in series
         dt = T / N # time step size
         t = np.linspace(0, T, N)
         W = np.random.standard_normal(size=N)

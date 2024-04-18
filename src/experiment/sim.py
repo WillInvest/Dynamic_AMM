@@ -47,16 +47,17 @@ def sim1(n, pair, start_dt, end_dt, frequency, L0=1000000.0, spread=0.5):
                 f'F{asset1}_inv', f'F{asset2}_inv', 'FL_inv', # AMM inventory of fees for each asset
                 f'{asset1}_dt', f'{asset2}_dt', 'L_dt', # AMM inventory changes for each asset
                 f'F{asset1}_dt', f'F{asset2}_dt', 'FL_dt', # AMM inventory fee changes for each asset
-                f'{asset1}_mrkt_dt', f'{asset2}_mrkt_dt'] # gbm price changes
+                f'{asset1}_gbm_dt', f'{asset2}_gbm_dt', # gbm price changes
+                f'{asset1}_mrkt_dt', f'{asset2}_mrkt_dt'] # market prices
     # assign new columns to gbm df with None values
     price_df = price_df.assign(**{col: None for col in new_cols})
     # # AMM PORTFOLIO @ t = 0 # #
     # evenly distribute assets
     amm_portfolio = {asset1: math.sqrt(L0), asset2: math.sqrt(L0), 'L': L0} # initial portfolio
     # add initial inventory to df
-    price_df[f'{asset1}_inv'][0] = amm_portfolio[asset1] # add initial inventory to df
-    price_df[f'{asset2}_inv'][0] = amm_portfolio[asset2] # add initial inventory to df
-    price_df['L_inv'][0] = amm_portfolio['L'] # add initial inventory to df
+    price_df.at[0, f'{asset1}_inv'] = amm_portfolio[asset1] # add initial inventory to df
+    price_df.at[0, f'{asset2}_inv'] = amm_portfolio[asset2] # add initial inventory to df
+    price_df.at[0, 'L_inv'] = amm_portfolio['L'] # add initial inventory to df
     # # MARKET PORTFOLIO @ t = 0 # #
     market_init_portfolio = {"A": price_df.iloc[0][f'{asset1}_mrkt_price'], "B": price_df.iloc[0][f'{asset2}_mrkt_price'], "L": 0.0} # initial portfolio 
     # # TIME SERIES SIMULATIONS # #
@@ -74,44 +75,54 @@ def sim1(n, pair, start_dt, end_dt, frequency, L0=1000000.0, spread=0.5):
         amms = [nofeeAMM, percentAMM, triAMM] # store amms
 # BUG BELOW
         # # SIMULATION # #
-        for t in range(n_timesteps): # iterate over each timestep in crypto market data
-            
-            print("HERE 1")
-
+        # iterate over each timestep in crypto market data
+        for t in range(n_timesteps+1): 
+            # set market data for each amm at initial timestep
             if t == 0:
-                price_df[f'{asset1}_mrkt_dt'][t] = 0
+                for amm in amms: 
+                    amm.market_data = price_df
+                    # set initial dt's to 0
+                    dt_columns = [
+                        f'{asset1}_gbm_dt', f'{asset2}_gbm_dt', f'{asset1}_mrkt_dt', f'{asset2}_mrkt_dt', 
+                        f'{asset1}_dt', f'{asset2}_dt', 'L_dt', f'F{asset1}_dt', f'F{asset2}_dt', 'FL_dt']
+                    for column in dt_columns: amm.market_data.at[t, column] = 0.0
 
-
-
-                
-            
-            for amm in amms: # update market data with amm data
-    # BUG: column doesnt exist - change df pass through
-                ratio = df[f'{asset1}_inv'][t] / df[f'{asset2}_inv'][t] # get ratio of asset1 to asset2
-                
+            # update market data df with simulated transactions
+            for amm in amms:
+                # get ratio of asset1 to asset2
+                amm_ratio = amm.market_data[f'{asset1}_inv'][t] / amm.market_data[f'{asset2}_inv'][t]
+                gbm_ratio = amm.market_data[f'{asset1}_gbm_price'][t] / amm.market_data[f'{asset2}_gbm_price'][t]
                 # # ARBITRAGE AGENT # #
-                if price_df[f'amm_{asset1}/{asset2}'][t] > (price_df[f'gbm_{asset1}/{asset2}'][t] * (1+spread/100)): # rule-based arbitrage agents in the market
+                # if amm_ratio is greater than gbm_ratio by 0.5% or more 
+                if amm_ratio > gbm_ratio * 1.005: # sell asset1, buy asset2
                     asset_out, asset_in, asset_in_n = asset1, asset2, random.choice(list(range(1, 50))) # modeling market efficiency
-                if (price_df[f'amm_{asset1}/{asset2}'][t] * 1.005) < price_df[f'gbm_{asset1}/{asset2}'][t]:
-                    asset_out, asset_in, asset_in_n = asset2, asset1, random.choice(list(range(1, 50)))
+                elif amm_ratio * 1.005 < gbm_ratio: # sell asset2, buy asset1
+                    asset_out, asset_in, asset_in_n = asset2, asset1, random.choice(list(range(1, 50))) # modeling market efficiency
                 else: continue
-
-                print("HERE 4")
-                
-                # call trade for each AMM
+                # call trade (on each AMM)
                 succ, info = amm.trade_swap(asset_out, asset_in, asset_in_n)
-                new_row = {f'{asset1}_inv': amm.portfolio[asset1], f'{asset2}_inv': amm.portfolio[asset2], # add trade info to df
-                           'LInv': amm.portfolio['L'], asset1: info['asset_delta'][asset1], 
-                           f'{asset2}': info['asset_delta'][asset2], 'L': info['asset_delta']['L'], 
-                        f'F{asset1}': amm.fees[asset1], f'F{asset2}': amm.fees[asset2], 'FL': amm.fees['L']}
-                df.loc[t] = new_row # append new row to df
-                # df.append(new_row, ignore_index=True)               
-                
-                print("HERE 5")                                                                            # TRYING TO FIX BUG !!!!
-
-        for amm, df in amms:
-            sim_amm_dfs.append(df)
-    return sim_amm_dfs # return list of dfs for each simulation
+                # # UPDATE DATA # #
+                if succ: # if trade successful
+                    # update inventory
+                    # Define a dictionary to map DataFrame columns to their respective data sources
+                    inventory_update = {f'{asset_out}_inv': amm.portfolio[asset_out], f'{asset_in}_inv': amm.portfolio[asset_in],
+                        f'{asset_out}_dt': info['asset_delta'][asset_out], f'{asset_in}_dt': info['asset_delta'][asset_in],
+                        f'F{asset_out}_inv': amm.fee_portfolio[asset_out], f'F{asset_in}_inv': amm.fee_portfolio[asset_in],
+                        f'F{asset_out}_dt': info['fee_delta'][asset_out], f'F{asset_in}_dt': info['fee_delta'][asset_in],
+                        f'{asset1}_gbm_dt': amm.market_data.at[t, f'{asset1}_gbm_price'] - amm.market_data.at[t-1, f'{asset1}_gbm_price'],
+                        f'{asset2}_gbm_dt': amm.market_data.at[t, f'{asset2}_gbm_price'] - amm.market_data.at[t-1, f'{asset2}_gbm_price'],
+                        f'{asset1}_mrkt_dt': amm.market_data.at[t, f'{asset1}_mrkt_price'] - amm.market_data.at[t-1, f'{asset1}_mrkt_price'],
+                        f'{asset2}_mrkt_dt': amm.market_data.at[t, f'{asset2}_mrkt_price'] - amm.market_data.at[t-1, f'{asset2}_mrkt_price']}
+                    # iterate over the dictionary to update the df
+                    for key, value in inventory_update.items(): amm.market_data.at[t, key] = value
+                # repeat for each amm here
+            # repeats for each timestep here
+        # # STORE DATA # #
+        for amm in amms:
+            # store amm data in list
+            sim_amm_dfs.append(amm.market_data)
+    # return list of simulation dfs
+    return sim_amm_dfs 
 
 
 def main():
