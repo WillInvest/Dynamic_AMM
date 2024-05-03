@@ -16,69 +16,50 @@ from amm.utils import add_dict, FeeDict, distribute_fees, add_lp_tokens
 # ABSTRACT CLASS
 class AMM(ABC):
     # DEFAULT INVENTORY
-    default_init_portfolio = {'A': 10000.0, 'B': 10000.0, "L": None}
-    fee_init_portfolio = {'A': 0.0, 'B': 0.0, "L": 0.0}
+    init_default_portfolio = {'A': 10000.0, 'B': 10000.0, "L": np.nan}
+    init_fee_portfolio = {'A': 0.0, 'B': 0.0, "L": 0.0}
     # MARKET TRACKING
-    market_init_portfolio = {'A': None, 'B': None, "L": None}
-
+    init_market_portfolio = {'A': np.nan, 'B': np.nan, "L": np.nan}
     # INITIALIZING AMM
     def __init__(self, *,
                  utility_func: Literal["constant_product"] = "constant_product",
-                 initial_portfolio: Dict[str, float] = None,
-                 initial_fee_portfolio: Dict[str, float] = None,
-                 market_init_portfolio: Dict[str, float] = None,
+                 init_portfolio: Dict[str, float] = None,
+                 init_fee_portfolio: Dict[str, float] = None,
+                 init_mrkt_portfolio: Dict[str, float] = None,
                  market_data: pd.DataFrame = None,
                  fee_structure: BaseFee = None,
                  solver: Literal['bisec'] = 'bisec') -> None:
-        
     # INITITALIZING AMM FUNCTIONALITY
         # # set utility function - constant product
-        if utility_func == "constant_product":
-            self.utility_func = ConstantProduct(token_symbol='L')
+        if utility_func == "constant_product": self.utility_func = ConstantProduct(token_symbol='L')
         # # set solver - bisection
-        if solver == 'bisec':
-            self.solver = find_root_bisection
-        else:
-            raise RuntimeError(f"No solver found for {solver}.")
+        if solver == 'bisec': self.solver = find_root_bisection
+        else: raise RuntimeError(f"No solver found for {solver}.")
         # # set fee structure - default to no fee
-        if fee_structure is not None:
-            self.fee_structure = fee_structure
-        else:
-            self.fee_structure = NoFee()
-        
+        if fee_structure is not None: self.fee_structure = fee_structure
+        else: self.fee_structure = NoFee()
     # INITITALIZING AMM INVENTORY
         # # set initial portfolio if given
-        if initial_portfolio:
-            self.portfolio = initial_portfolio
+        if init_portfolio: self.portfolio = init_portfolio
         # # otherwise set to default
-        else:
-            self.portfolio = self.default_init_portfolio.copy()
+        else: self.portfolio = self.init_default_portfolio.copy()
         # # set initial fee portfolio if given
-        
-        if initial_fee_portfolio:
-            self.fees = initial_fee_portfolio
+        if init_fee_portfolio: self.fees = init_fee_portfolio
         # # otherwise set to default
-        else:
-            self.fees = self.fee_init_portfolio.copy()
+        else: self.fees = self.fee_init_portfolio.copy()
         # # create fee dictionary
         self.fees = FeeDict(self.fees)
-
         # # set initial market portfolio if given
-        if market_init_portfolio:
-            self.market_data = market_init_portfolio
+        if init_mrkt_portfolio: self.market_data = init_mrkt_portfolio
         # # otherwise set to default
-        else:
-            self.market_data = self.market_init_portfolio.copy()
-
+        else: self.market_data = self.init_mrkt_portfolio.copy()
     # CREATE AMM DATA STORAGE
         # # define df to store AMM data
-        if market_data:
-            self.market_data = market_data
+        if market_data: self.market_data = market_data
         # # if not given scheme, create new df w/ port & fee scheme
         else:
             columns = [key for key in self.portfolio] + [f"F_{key}" for key in self.fees]
             self.data = pd.DataFrame(columns = columns)
-
     # INITIALIZE AMM DATA & LIQUIDITY TOKENS
         # # save number of assets (excluding L)
         self.num_assets = len(self.portfolio) - 1
@@ -87,7 +68,9 @@ class AMM(ABC):
         self.portfolio['L'] = init_num_lp
         # # create liquidity token info
         self.lp_tokens = {'initial': init_num_lp}
-        # # add LP users later if implementing (e.g. 'user_id': 1.0)
+        # # add LP users later if decide to implement (e.g. 'user_id': 1.0)
+    # ADD TIME TRACKING
+        self.time = 0
 
     # ADD LIQUIDITY PROVIDER TO AMM
     def register_lp(self, user: str) -> None:
@@ -139,29 +122,40 @@ class AMM(ABC):
 
 # UPDATE AMM INVENTORY
     def update_portfolio(self, *, delta_assets: dict = {}, check: bool = True) -> Tuple[bool, dict]:
-        '''
-        Manually update portfolio, this may lead to a unbalanced portfolio. Take completed trade dictionary, delta_assets, and update the amm portfolio accordingly
-        delta_assets: dict - trade dictionary
-        check: 
+        # catch assertion error
+        try: 
+            # iterate through fee dictionary
+            for asset in delta_assets: 
+                assert asset in self.portfolio, f"Asset symbol {asset} is not in the pool."
+                # update fee portfolio for each in fee dictionary
+                self.fees[asset] += delta_assets[asset]
+        # catch assertion error
+        except AssertionError as info: return False, {'error_info': info}
+        return check, {} # return success
+        
+        # ""Manually update portfolio, this may lead to a unbalanced portfolio. Take completed trade dictionary, delta_assets, and update the amm portfolio accordingly
+        # delta_assets: dict - trade dictionary" 
+        # check: 
+
 # TODO: figure out why it may be unbalanced and what check is
         '''
-        if check:
-            target = self.target_function(delta_assets=delta_assets) 
-            assert abs(target) < 1e-8, f"Target: {target}"
-        try:
-            # for each asset in the swap
-            for k in delta_assets:
-                # check trade asset is in portfolio
-                assert k in self.portfolio, k
-                # temp store updated amm value & check
-                temp_result = self.portfolio[k] + delta_assets[k]
-                # check for negative amount
-                if temp_result <= 0.: return False, {"error_info": f"Value: resulting non-positive amount of {k}."}
-                # update portfolio value
-                self.portfolio[k] = temp_result
-        except AssertionError: return False, {"error_info": f"AssertionError: {k} not in {delta_assets}."}
-        return True, {} # return success
-
+        # if check:
+        #     target = self.target_function(delta_assets=delta_assets) 
+        #     assert abs(target) < 1e-8, f"Target: {target}"
+        # try:
+        #     # for each asset in the swap
+        #     for k in delta_assets:
+        #         # check trade asset is in portfolio
+        #         assert k in self.portfolio, k
+        #         # temp store updated amm value & check
+        #         temp_result = self.portfolio[k] + delta_assets[k]
+        #         # check for negative amount
+        #         if temp_result <= 0.: return False, {"error_info": f"Value: resulting non-positive amount of {k}."}
+        #         # update portfolio value
+        #         self.portfolio[k] = temp_result
+        # except AssertionError: return False, {"error_info": f"AssertionError: {k} not in {delta_assets}."}
+        # return True, {} # return success
+        '''
 # UPDATE FEE INVENTORY
     def update_fee(self, fees: dict) -> Tuple[bool, dict]:
         """
@@ -191,7 +185,7 @@ class AMM(ABC):
 
 # QUOTE W/ FEE ON ASSET IN
     def _quote_pre_fee(self, asset_out: str, asset_in: str, asset_in_n: float) -> Tuple[float, Dict]:
-        fee_dict = self.fee_structure.calculate_fee({asset_out: None, asset_in: asset_in_n}, asset_in, portfolio=self.portfolio, amm=self) # calc fee 
+        fee_dict = self.fee_structure.calculate_fee({asset_out: np.nan, asset_in: asset_in_n}, asset_in, portfolio=self.portfolio, amm=self) # calc fee 
         actual_in_n = asset_in_n - fee_dict[asset_in] # calc how much goes into public amm inventory pool, less fees
         asset_out_n, info = self._quote_no_fee(asset_out, asset_in, actual_in_n) # calc how much out w/ fee already deducted
         info.update({'asset_delta': {asset_out: asset_out_n, asset_in: actual_in_n}, 'fee': fee_dict}) # add adjusted inventory & fees

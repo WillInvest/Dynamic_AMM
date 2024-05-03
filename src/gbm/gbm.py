@@ -15,6 +15,31 @@ from data.kaiko import fetch_data
 
 
 
+def geometric_brownian_motion(mu, sigma, S0, T, N, dt):
+    """
+    Generate geometric brownian motion.
+
+    Parameters:
+        mu (float): Drift coefficient.
+        sigma (float): Diffusion coefficient.
+        S0 (float): Initial value.
+        T (float): Terminal time.
+        N (int): Number of time steps.
+        dt (float): Time step size.
+
+    Returns:
+        numpy.ndarray: Simulated GBM path.
+    """
+    t = np.linspace(0, T, N)
+    W = np.random.standard_normal(size=N)
+    W = np.cumsum(W) * np.sqrt(dt)  # Standard Brownian motion
+    X = (mu - 0.5 * sigma*2)**t + sigma * W 
+    S = S0 * np.exp(X)  # Geometric Brownian motion
+    return S
+
+
+# # NOTE TODO: BELOW FUNCTIONS CURRENTLY NOT IN USE # #
+
 def gbm_assumption_test(log_returns, show_all_results=False):
     adf_result = adfuller(log_returns) # check for stationarity
     shapiro_result = shapiro(log_returns) # check for normality
@@ -77,7 +102,7 @@ def calibrate_gbm(asset, data, frequency, T, N, type, show_all_results=False):
 
     return mu (float), sigma (float), S (numpy.ndarray)
     """
-    
+
     if type == "reg":
         returns = np.log((data / data.shift(1)).dropna()) # get returns
         gbm_assumption_test(returns) # test gbm assumptions
@@ -111,6 +136,7 @@ def calibrate_gbm(asset, data, frequency, T, N, type, show_all_results=False):
         X = (mu - 0.5 * sigma**2) * t + sigma * W 
         S = S0 * np.exp(X)  # GBM
         return mu, sigma, S
+    
 
 def get_price_data(pair, start_date, end_date, freq, api_key):
     """

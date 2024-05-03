@@ -78,13 +78,12 @@ class TriangleFee(BaseFee):
             delta_val = ((Y + delta_y) / (X - delta_x)) - (Y / X)
             # calc final fee adding to base fee for transactions that are of same sign as slope (e.g. slope of
             # -1 and delta_val of asset-in is negative, fee will be addition of their product, base + n)
+            # base_fee = starting fee
             end_fee = max([(min_fee), (base_fee + (fee_slope * delta_val))])
             # update fee dict with fee asset and final fee
             fee_dict[fee_asset] = end_fee
         # return fee info with calculated fee
         return fee_dict
-
-
 
 class ILossFee(BaseFee):
     def __init__(self, base_fee: float, min_fee: float, fee_slope: float) -> None:
@@ -92,21 +91,89 @@ class ILossFee(BaseFee):
         self.base_fee = base_fee
         self.min_fee = min_fee
         self.fee_slope = fee_slope
-# # TODO: FINISH B4 IMPLEMENTING
+
     def calculate_fee(self, transaction_dict: Dict[str, float], fee_asset: str, **kwargs) -> dict:
-        # ensure portfolio is defined
+        """
+        Calculates fee based on the market value change of the assets involved in the transaction.
+        Base fee is applied unless the change in market value alters the fee beyond a minimum threshold.
+        NOTE: base_fee =< min_fee & selecting allows for adjusting point at which triangle fees start to be applied
+        base_fee (float): base fee for value change calc
+        min_fee (float): minimum fee for all final triangle fee calcs
+        fee_slope (float): slope of fee calc (affects impact of triangle component)
+        (e.g. -1 for charging higher for negative impacts to market value of amm portfolio)
+        market_prices (df): dataframe of market prices for all assets in the AMM
+        """
+        # ensure AMM and market price data are defined
         amm = kwargs.get("amm")
-        assert amm is not None, "AMM must be defined for triangle fee."
-        asset_out, asset_in = list(transaction_dict.keys())[0], list(transaction_dict.keys())[1] # get str for asset out and asset in
-        # ensure fee asset is in transaction
-        assert asset_in in transaction_dict, f"Fee asset has to be one of the assets in the transaction."
-        # find change in AMM market value
-        # mvalue_t0 = amm. # # TODO: HAVE HISTORY BE PART OF AMM SO CAN FEE BASED ON MARKET VALUE
+        # assuming market prices are passed as part of kwargs
+        market_data = kwargs.get("market_data") 
+        assert amm is not None, "AMM must be defined for Iloss fee."
+        assert market_data is not None, "Market price data must be available."
+        # get the other asset in the transaction for gbm
+        other_asset = set(amm.portfolio.keys()) - {fee_asset, 'L'}
+        asset2 = other_asset.pop()
+
+# TODO:  CALC RETS IN SIM AND REGERENCE FOR THIS --- 
+        # get the gbm prices
+        a1_gbm = market_data[f'{fee_asset}_gbm_price']
+        a2_gbm = market_data[f'{asset2}_gbm_price']
+        # get change in time
+        a1_gbm = market_data[f'{fee_asset}_gbm_dt']
+        a2_gbm = market_data[f'{asset2}_gbm_dt']
+        # get the transaction assets
+        asset_out, asset_in = list(transaction_dict.keys())
+        # ensure fee asset is part of the transaction
+        assert fee_asset in transaction_dict, "Fee asset must be one of the assets in the transaction."
+
+
+
+# TODO: 
+
+
         fee_dict = {}
-        if asset_in != "L":
-            asset_out_n, info = amm._quote_no_fee(asset_out, asset_in, transaction_dict[asset_in]) # get delta x to set upper limit
+        if asset_in != "L":  # Skip fee calculation for liquidity transactions
+            # Fetch pre-transaction prices and calculate market values
+            market_value_pre = amm.portfolio[asset_out] * market_data[asset_out] + amm.portfolio[asset_in] * market_data[asset_in]
             
-        return 0
+            # Simulate transaction and get new asset amounts
+            asset_out_n, info = amm._quote_no_fee(asset_out, asset_in, transaction_dict[asset_in])
+            new_portfolio = {
+                asset_out: amm.portfolio[asset_out] - asset_out_n,
+                asset_in: amm.portfolio[asset_in] + transaction_dict[asset_in]
+            }
+
+            # Calculate post-transaction market values
+            market_value_post = new_portfolio[asset_out] * market_data[asset_out] + new_portfolio[asset_in] * market_data[asset_in]
+
+            # Calculate the value change and the fee
+            delta_market_value = market_value_post - market_value_pre
+            base_fee, min_fee, fee_slope = self.base_fee, self.min_fee, self.fee_slope
+
+            # Apply fee calculation based on the change in market value
+            effective_fee = max(min_fee, base_fee + fee_slope * delta_market_value)
+            fee_dict[fee_asset] = effective_fee if delta_market_value < 0 else 0  # Apply fee only for negative impact
+
+        return fee_dict
+
+
+
+
+
+
+    # def calculate_fee(self, transaction_dict: Dict[str, float], fee_asset: str, **kwargs) -> dict:
+    #     # ensure portfolio is defined
+    #     amm = kwargs.get("amm")
+    #     assert amm is not None, "AMM must be defined for triangle fee."
+    #     asset_out, asset_in = list(transaction_dict.keys())[0], list(transaction_dict.keys())[1] # get str for asset out and asset in
+    #     # ensure fee asset is in transaction
+    #     assert asset_in in transaction_dict, f"Fee asset has to be one of the assets in the transaction."
+    #     # find change in AMM market value
+    #     # mvalue_t0 = amm. # # TODO: HAVE HISTORY BE PART OF AMM SO CAN FEE BASED ON MARKET VALUE
+    #     fee_dict = {}
+    #     if asset_in != "L":
+    #         asset_out_n, info = amm._quote_no_fee(asset_out, asset_in, transaction_dict[asset_in]) # get delta x to set upper limit
+            
+    #     return 0
 
 
     # TODO: make market value fee calc - need to add marketDF to AMM
