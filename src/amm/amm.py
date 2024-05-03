@@ -15,11 +15,6 @@ from amm.utils import add_dict, FeeDict, distribute_fees, add_lp_tokens
 
 # ABSTRACT CLASS
 class AMM(ABC):
-    # DEFAULT INVENTORY
-    init_default_portfolio = {'A': 10000.0, 'B': 10000.0, "L": np.nan}
-    init_fee_portfolio = {'A': 0.0, 'B': 0.0, "L": 0.0}
-    # MARKET TRACKING
-    init_market_portfolio = {'A': np.nan, 'B': np.nan, "L": np.nan}
     # INITIALIZING AMM
     def __init__(self, *,
                  utility_func: Literal["constant_product"] = "constant_product",
@@ -42,17 +37,19 @@ class AMM(ABC):
         # # set initial portfolio if given
         if init_portfolio: self.portfolio = init_portfolio
         # # otherwise set to default
-        else: self.portfolio = self.init_default_portfolio.copy()
+        else: self.portfolio = {'A': 10000.0, 'B': 10000.0, "L": np.nan}
         # # set initial fee portfolio if given
         if init_fee_portfolio: self.fees = init_fee_portfolio
+        # # if init portfolio given, use it to create fee portfolio
+        elif init_portfolio: self.fees = {f'F{key}': 0.0 for key in self.portfolio}
         # # otherwise set to default
-        else: self.fees = self.fee_init_portfolio.copy()
+        else: self.fees = {'A': 0.0, 'B': 0.0, "L": 0.0}
         # # create fee dictionary
         self.fees = FeeDict(self.fees)
         # # set initial market portfolio if given
         if init_mrkt_portfolio: self.market_data = init_mrkt_portfolio
         # # otherwise set to default
-        else: self.market_data = self.init_mrkt_portfolio.copy()
+        else: self.market_data = {'A': np.nan, 'B': np.nan, "L": np.nan}
     # CREATE AMM DATA STORAGE
         # # define df to store AMM data
         if market_data: self.market_data = market_data
@@ -122,17 +119,30 @@ class AMM(ABC):
 
 # UPDATE AMM INVENTORY
     def update_portfolio(self, *, delta_assets: dict = {}, check: bool = True) -> Tuple[bool, dict]:
+        '''
+        Manually update portfolio, this may lead to a unbalanced portfolio. Take completed trade dictionary, delta_assets, and update the amm portfolio accordingly
+        delta_assets: dict - trade dictionary
+        check: 
+        '''    
         # catch assertion error
+        if check:
+                    target = self.target_function(delta_assets=delta_assets) 
+                    assert abs(target) < 1e-8, f"Target: {target}"
+
         try: 
             # iterate through fee dictionary
             for asset in delta_assets: 
                 assert asset in self.portfolio, f"Asset symbol {asset} is not in the pool."
-                # update fee portfolio for each in fee dictionary
-                self.fees[asset] += delta_assets[asset]
+                temp_result = self.portfolio[asset] + delta_assets[asset] # temp updated amm val 4 check
+                if temp_result <= 0.: return False, {"error_info": f"Value: {asset} resulting in non-positive amm inventory."} # check
+                self.portfolio[asset] = temp_result # update portfolio value
         # catch assertion error
         except AssertionError as info: return False, {'error_info': info}
         return check, {} # return success
         
+
+
+
         # ""Manually update portfolio, this may lead to a unbalanced portfolio. Take completed trade dictionary, delta_assets, and update the amm portfolio accordingly
         # delta_assets: dict - trade dictionary" 
         # check: 
@@ -230,7 +240,7 @@ class AMM(ABC):
         '''
         if asset_in_n == 0.0:
 #NOTE added fee dict to this bcs _trade usually does, but sean didnt have so shouldnt create bug but just temp note here
-            return False, {'asset_delta': {"A": 0.0, "B": 0.0}, 'fee': {"FA": 0.0, "FB": 0.0}}
+            return False, {'asset_delta': {f"{asset_in}": 0.0, f"{asset_out}": 0.0}, 'fee': {f"F{asset_in}": 0.0, f"F{asset_out}": 0.0}}
         if 'L' in (asset_out, asset_in): return False, {'error_info': f"Cannot update liqudity tokens using 'trade_swap'."}
         return self._trade(asset_out, asset_in, asset_in_n) # if not liquidity event, call trade function
 

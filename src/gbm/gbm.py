@@ -33,12 +33,11 @@ def geometric_brownian_motion(mu, sigma, S0, T, N, dt):
     t = np.linspace(0, T, N)
     W = np.random.standard_normal(size=N)
     W = np.cumsum(W) * np.sqrt(dt)  # Standard Brownian motion
-    X = (mu - 0.5 * sigma*2)**t + sigma * W 
+    X = (mu - 0.5 * sigma**2) * t + sigma * W 
     S = S0 * np.exp(X)  # Geometric Brownian motion
     return S
 
-
-# # NOTE TODO: BELOW FUNCTIONS CURRENTLY NOT IN USE # #
+# # NOTE: BELOW FUNCTIONS CURRENTLY NOT IN USE # #
 
 def gbm_assumption_test(log_returns, show_all_results=False):
     adf_result = adfuller(log_returns) # check for stationarity
