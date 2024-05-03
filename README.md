@@ -29,6 +29,29 @@ Welcome to the Generalized Automated Market Maker (AMM) Simulation repository! T
 
 ## Usage
 
+Updates on usage 5/3/34 - drew carranti
+
+1. amm folder
+- contains all amm infrastructure
+- not much different from inmplementation as far as organization of logic into files and functions
+2. Analysis
+analysis folder
+- contains Yuvaraj’s plotting code - kind of deprecated as of now bcs any plots are being generated in sim.ipynb for experiments
+3. api_key
+- for storing individual kaiko api key - no longer in use
+data folder
+- contains crypto_data folder and kaiko script for pulling data
+experiment folder
+- prev folder has old experimentation work - including previous files from Sean, Akashi, yuvaraj, that I have since integrated the accurate components into the greater codebase
+- main - original main file we had previously been running out of
+- sim script - when the notebook has been used to find the set of experiments we want to run and we want to run a lot of them at once - we can parameterize sim, move updated version into the script, and then called on repeatedly for different params
+- sim.ipynb - used for developing experimentation framework before being parameterized and compressed into script for repeated calling
+gbm
+- contains gbm generation code - most is deprecated as it was primarily built out for kaiko gbm calibration - but we 
+
+
+
+
 Check ```main.py```
 <!-- To use the AMM simulation, import the necessary modules in your Python script and create instances of the AMM, fee structure, solver, and utility functions as needed. You can then simulate various scenarios and analyze the behavior of the AMM under different conditions.
 
