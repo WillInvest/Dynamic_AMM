@@ -188,9 +188,9 @@ class AMM(ABC):
         return func
 
 # QUOTE W/ FEE ON ASSET IN
-    def _quote_pre_fee(self, asset_out: str, asset_in: str, asset_in_n: float) -> Tuple[float, Dict]:
+    def _quote_pre_fee(self, asset_out: str, asset_in: str, asset_in_n=None, asset_out_n=None) -> Tuple[float, Dict]:
         fee_dict = self.fee_structure.calculate_fee({asset_out: None, asset_in: asset_in_n}, asset_in, portfolio=self.portfolio, amm=self) # calc fee
-        actual_in_n = asset_in_n - fee_dict[asset_in] # calc how much goes into public amm inventory pool, less fees
+        actual_in_n = asset_in_n - fee_dict[asset_in] # fee asset in
         asset_out_n, info = self._quote_no_fee(asset_out, asset_in, actual_in_n) # calc how much out w/ fee already deducted
         info.update({'asset_delta': {asset_out: asset_out_n, asset_in: actual_in_n}, 'fee': fee_dict}) # add adjusted inventory & fees
         return asset_out_n, info
@@ -199,7 +199,7 @@ class AMM(ABC):
     def _quote_post_fee(self, asset_out: str, asset_in: str, asset_in_n: float) -> Tuple[float, Dict]:
         asset_out_n, info = self._quote_no_fee(asset_out, asset_in, asset_in_n) # get asset out amount
         fee_dict = self.fee_structure.calculate_fee({asset_out: asset_out_n, asset_in: asset_in_n}, asset_out, portfolio=self.portfolio, amm=self) # calc fee
-        actual_out_n = asset_out_n + fee_dict[asset_out] # add back fee that is seperated in swap
+        actual_out_n = asset_out_n - fee_dict[asset_out] # fee on asset out
         info.update({'asset_delta': {asset_out: asset_out_n, asset_in: asset_in_n}, 'fee': fee_dict}) # updated inventory & save seperated fee 
         return actual_out_n, info
 

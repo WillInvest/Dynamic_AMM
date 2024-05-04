@@ -205,7 +205,7 @@ class AMM(ABC):
     def _quote_post_fee(self, asset_out: str, asset_in: str, asset_in_n: float) -> Tuple[float, Dict]:
         asset_out_n, info = self._quote_no_fee(asset_out, asset_in, asset_in_n) # get asset out amount
         fee_dict = self.fee_structure.calculate_fee({asset_out: asset_out_n, asset_in: asset_in_n}, asset_out, portfolio=self.portfolio, amm=self) # calc fee
-        actual_out_n = asset_out_n + fee_dict[asset_out] # add back fee that is seperated in swap
+        actual_out_n = asset_out_n - fee_dict[asset_out] # calc how much goes into public amm inventory pool, less fees
         info.update({'asset_delta': {asset_out: asset_out_n, asset_in: asset_in_n}, 'fee': fee_dict}) # updated inventory & save seperated fee 
         return actual_out_n, info
 
