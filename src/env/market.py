@@ -2,6 +2,12 @@ import numpy as np
 
 class GBMPriceSimulator:
     def __init__(self, start_price=1.0, mu=0.1, sigma=0.5, epsilon=0.05, dt=0.01):
+        self.initial_price = start_price  # Store the initial price
+        self.initial_mu = mu  # Store the initial drift coefficient
+        self.initial_sigma = sigma  # Store the initial volatility coefficient
+        self.initial_epsilon = epsilon  # Store the initial proportional difference for bid/ask prices
+        self.initial_dt = dt  # Store the initial time step
+
         self.current_price = start_price  # Current midpoint price
         self.mu = mu  # Drift coefficient
         self.sigma = sigma  # Volatility coefficient
@@ -24,11 +30,13 @@ class GBMPriceSimulator:
         self.current_price *= np.exp((self.mu - 0.5 * self.sigma**2) * self.dt + self.sigma * np.sqrt(self.dt) * shock)
         
     def reset(self):
-        '''
-        Reset the simulator
-        '''
-        raise NotImplementedError
-    
+        """Reset the simulator to the initial state."""
+        self.current_price = self.initial_price
+        self.mu = self.initial_mu
+        self.sigma = self.initial_sigma
+        self.epsilon = self.initial_epsilon
+        self.dt = self.initial_dt
+
     
 if __name__ == '__main__':
     # Example of using the class

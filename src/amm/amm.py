@@ -68,6 +68,10 @@ class AMM(ABC):
         # # add LP users later if decide to implement (e.g. 'user_id': 1.0)
     # ADD TIME TRACKING
         self.time = 0
+
+        # Save the initial state
+        self.initial_portfolio = self.__portfolio.copy()
+        self.initial_fees = self.__fees.copy()
         
     @property
     def portfolio(self):
@@ -78,7 +82,9 @@ class AMM(ABC):
         return self.__fees
     
     def reset(self):
-        raise NotImplementedError
+        self.__portfolio = self.initial_portfolio.copy()
+        self.__fees = self.initial_fees.copy()
+        self.time = 0
 
     # ADD LIQUIDITY PROVIDER TO AMM
     def register_lp(self, user: str) -> None:
