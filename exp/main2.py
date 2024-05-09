@@ -1,6 +1,6 @@
 # importing src directory
 import sys
-sys.path.append('..')
+sys.path.append('')
 # experiment imports
 # from src.amm import amm
 
@@ -17,42 +17,42 @@ def set_trade_after_execution(amm_instance, MP, inv1, inv2):
     set_market_trade(amm_instance, MP, inv1, inv2)
 
 
-class MarketGBM:
-    def get_best_bid()
-    
-    def get_best_ask()
-    
-    def next()
-    
-market = MarketGBM()
-
-class AmmArbitrageEnv:
-    def __init__(self, market, AMM) -> None:
-        self.obs_space: 
-        self.act_space: (-1, 1), (0, 1)
-        
-        
-    def step(self, action: ):
-        reward = self.__get_reward()
-        
-        self.AMM.trade_swap()
-        self.market.trade
-        
-        obs.append(self.market.get_best_bid())
-        
-        self.market.next()
-        
-        
-        return next_obs, reward, done, trucated, info
-    
-    def __get_reward(self):
-        '''
-        
-        '''
-        pass
-    
-    def reset(self):
-        pass
+# class MarketGBM:
+#     def get_best_bid()
+#
+#     def get_best_ask()
+#
+#     def next()
+#
+# market = MarketGBM()
+#
+# class AmmArbitrageEnv:
+#     def __init__(self, market, AMM) -> None:
+#         self.obs_space:
+#         self.act_space: (-1, 1), (0, 1)
+#
+#
+#     def step(self, action: ):
+#         reward = self.__get_reward()
+#
+#         self.AMM.trade_swap()
+#         self.market.trade
+#
+#         obs.append(self.market.get_best_bid())
+#
+#         self.market.next()
+#
+#
+#         return next_obs, reward, done, trucated, info
+#
+#     def __get_reward(self):
+#         '''
+#
+#         '''
+#         pass
+#
+#     def reset(self):
+#         pass
 
 
 def main():
@@ -75,6 +75,7 @@ def main():
         print(order)
         # amm.track_asset_ratio('A','B')
         success, trade_info = amm.trade_swap(s1, s2, s2_in)
+        print(trade_info)
         # if success:
         #     t = Thread(target=set_trade_after_execution,
         #                args=(amm, 10, 'B', 'A'))
