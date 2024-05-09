@@ -2,9 +2,32 @@
 import sys
 sys.path.append('..')
 # library imports
-from typing import Dict
+from typing import Dict, Any
 import math
 import time
+
+
+class SmartDict(dict):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+    def __getitem__(self, key: Any) -> Any:
+        try:
+            return super().__getitem__(key)
+        except KeyError:
+            return 0.
+        
+    def __add__(self, other: dict):
+        # assert self.keys() == other.keys(), f'Keys must be the same keys'
+        result = SmartDict(self)
+        for key, value in other.items():
+            if key in result:
+                result[key] += value
+            else:
+                result[key] = value
+        return result
+        
+        
 
 def parse_input(string: str):
     results = string.split(" ")

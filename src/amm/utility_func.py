@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Dict
 import numpy as np
 # project imports
-from amm.solver import find_root_bisection
+from .solver import find_root_bisection
 
 
 
