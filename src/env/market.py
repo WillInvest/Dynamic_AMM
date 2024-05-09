@@ -22,7 +22,14 @@ class GBMPriceSimulator:
         shock = np.random.normal()
         # Update the current price based on the GBM formula
         self.current_price *= np.exp((self.mu - 0.5 * self.sigma**2) * self.dt + self.sigma * np.sqrt(self.dt) * shock)
-
+        
+    def reset(self):
+        '''
+        Reset the simulator
+        '''
+        raise NotImplementedError
+    
+    
 if __name__ == '__main__':
     # Example of using the class
     simulator = GBMPriceSimulator()
