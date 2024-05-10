@@ -125,11 +125,11 @@ class AMM(ABC):
         # return target-1.
         # ----------------- end -------------------
 
-        # --------- log calculation -----------
+        # --------- calculation -----------
         target = self.utility_func.target_function(
             full_portfolio=tmp_portfolio)
         # ----------------- end -------------------
-        return np.exp(target) - 1.
+        return target#np.exp(target) - 1.
 
     def get_cummulative_fees(self) -> float:
         return self.__fees
@@ -155,7 +155,7 @@ class AMM(ABC):
                 self.__portfolio[asset] = temp_result # update portfolio value
         # catch assertion error
         except AssertionError as info: return False, {'error_info': info}
-        return check, {} # return success
+        return True, {} # return success
         
 
 
