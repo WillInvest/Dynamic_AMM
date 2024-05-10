@@ -1,6 +1,6 @@
 # importing src directory
 import sys
-sys.path.append('..')
+sys.path.append('')
 # experiment imports
 # from src.amm import amm
 
