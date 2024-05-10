@@ -27,7 +27,7 @@ def main():
         print("INFO")
         print(info)
         print("AMM")
-        print(amm.portfolio)
+        print(amm.__portfolio)
         if succ: # print trade completion message
             print("--------------------")
             print(f"Successful Swap  |  Paid: {abs(info['asset_delta'][asset_in])}{asset_in}  |  Received: {abs(info['asset_delta'][asset_out])}{asset_out}  |  Fee: {info['fee'][asset_out]}{asset_out}")

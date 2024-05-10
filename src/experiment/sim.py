@@ -126,7 +126,7 @@ def sim1(n, pair, start_dt, end_dt, frequency, L0=1000000.0, spread=0.5):
                 if executed:
                     # update inventory
                     # define a dictionary to map DataFrame columns to their respective data sources
-                    inventory_update = {f'{asset_out}_inv': amm.portfolio[asset_out], f'{asset_in}_inv': amm.portfolio[asset_in],
+                    inventory_update = {f'{asset_out}_inv': amm.__portfolio[asset_out], f'{asset_in}_inv': amm.__portfolio[asset_in],
                         f'{asset_out}_dt': info['asset_delta'][asset_out], f'{asset_in}_dt': info['asset_delta'][asset_in],
                         f'F{asset_out}_inv': amm.fee_portfolio[asset_out], f'F{asset_in}_inv': amm.fee_portfolio[asset_in],
                         f'F{asset_out}_dt': info['fee_delta'][asset_out], f'F{asset_in}_dt': info['fee_delta'][asset_in],
