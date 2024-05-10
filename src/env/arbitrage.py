@@ -31,7 +31,7 @@ class ArbitrageEnv:
             asset_delta = info['asset_delta']
             fee = info['fee']
             amm_order_cost = asset_delta['B'] + fee['B'] # unit is always in B 
-            market_order_gain = asset_delta['A']* (self.market.get_bid_price() if asset_delta['A'] < 0 else self.market.get_ask_price())
+            market_order_gain = (asset_delta['A'] + fee['A'])* (self.market.get_bid_price() if asset_delta['A'] < 0 else self.market.get_ask_price()) # market unit xxx B/A
             rew = - (market_order_gain + amm_order_cost)
         else:
             success, info = True, {}

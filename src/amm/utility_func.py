@@ -56,6 +56,18 @@ class BaseUtility(ABC):
     def target_function(self, full_portfolio: dict) -> float:
         '''
         Calculate the target value U(.)/V(.) - 1
+        
+        U(A, B) = A*B = V(L) = L^2
+        
+        AB/L^2 = 1
+        
+        f(A, B) = AB/L^2 - 1 = 0
+        g(A, L) = AB/L^2 - 1=0
+        
+        
+        U()/V() - 1 = 0
+        
+        
         should equal to 0.
         '''
         assert self.token_symbol in full_portfolio, f"Incomplete portfolio: missing liquidity token {self.token_symbol}"
