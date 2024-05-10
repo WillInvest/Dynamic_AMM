@@ -1,17 +1,23 @@
 import sys
 import os
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from market import GBMPriceSimulator
-from amm.amm import AMM, SimpleFeeAMM
-from amm.fee import PercentFee
+# sys.path.append("..")
 
+from src.env.market import GBMPriceSimulator
+from src.amm.amm import AMM, SimpleFeeAMM
+from src.amm.fee import PercentFee
+# from amm.utils import parse_input
 from typing import Tuple
 import numpy as np
 from gymnasium import spaces
 
 EPSILON = 1e-5
+
+def parse_input(string):
+    return [float(ele) for ele in string.split(" ") if ele]
+
 
 
 class ArbitrageEnv:
@@ -26,7 +32,7 @@ class ArbitrageEnv:
         self.cum_pnl = 0.
         self.observation_space = spaces.Box(low=np.array([0., 0., 0., 0.], dtype=np.float32),
                                             high=np.array([np.inf, np.inf, np.inf, np.inf], dtype=np.float32))
-        self.action_space = self.action_space = spaces.Box(low=np.array([-1 + EPSILON, 0], dtype=np.float32),
+        self.action_space = spaces.Box(low=np.array([-1 + EPSILON, 0], dtype=np.float32),
                                                            high=np.array([1 - EPSILON, 1]), dtype=np.float32)
 
     # action: [trade_size_fraction, trade_decision (take opportunity when >0.5)]
@@ -55,11 +61,11 @@ class ArbitrageEnv:
             market_order_gain = (asset_delta['A'] + fee['A']) * (
                 self.market.get_bid_price() if asset_delta['A'] < 0 else self.market.get_ask_price())
             rew = - (market_order_gain + amm_order_cost)
-            # print(f"asset_delta['A'] : {asset_delta['A']}, fee['A']: {fee['A']}")
-            # print(f"bid: {self.market.get_bid_price()}, ask: {self.market.get_ask_price()}")
-            # print(f"market_order_gain: {market_order_gain} | "
-            #       f"amm_order_cost: {amm_order_cost} | "
-            #       f"reward: {rew}")
+            print(f"asset_delta['A'] : {asset_delta['A']}, fee['A']: {fee['A']} | "
+                  f"asset_A : {self.amm.portfolio['A']} | asset_B : {self.amm.portfolio['B']} | ")
+            print(f"market_order_gain: {market_order_gain} | "
+                  f"amm_order_cost: {amm_order_cost} | "
+                  f"reward: {rew}")
         else:
             success, info = True, {}
             rew = 0.
@@ -85,9 +91,9 @@ class ArbitrageEnv:
     def get_obs(self) -> np.array:
         cur_market_price = self.market.current_price
         tmp = self.amm.portfolio
-        cur_amm_price = tmp['A'] / tmp['B']
+        cur_amm_price = tmp['B'] / tmp['A']
 
-        return np.array([cur_market_price, cur_amm_price, tmp['A'], tmp['B']], dtype=np.float32)
+        return np.array([cur_market_price, cur_amm_price, tmp['A']/10000, tmp['B']/10000], dtype=np.float32)
 
     def render(self, mode='human'):
         pass
@@ -107,15 +113,22 @@ if __name__ == '__main__':
     print(f"Initial observation: {obs}")
 
     # Perform a few steps with sample actions
-    for step in range(1000):
+    for step in range(10):
         # Generate a random action
         trade_size_fraction = np.random.uniform(-0.1, 0.1)  # Random number between -1 and 1
         trade_decision = np.random.uniform(0, 1)  # Random number between 0 and 1
-        action = np.array([trade_size_fraction, trade_decision], dtype=np.float32)
-        action[1] = 1
+        # action = np.array([trade_size_fraction, trade_decision], dtype=np.float32)
+        # action[1] = 1
+        s2string = input("Input string (i.e. A B 1): ")
+        if s2string == 'r':
+            env.reset()
+            continue  # reset
+        action = parse_input(s2string)
         print(f"\n--------------------"
               f"\nStep {step + 1}:")
         print(f"action: {action}")
+        print(f"market_ask: {market.get_ask_price()} | market_bid: {market.get_bid_price()}")
+        print(f"current_observation: {env.get_obs()}")
         next_obs, reward, done, truncated, info = env.step(action)
         print(f"Next observation: {next_obs}")
         print(f"Reward: {reward}")

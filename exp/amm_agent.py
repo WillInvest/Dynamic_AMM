@@ -24,25 +24,27 @@ from tianshou.utils.net.common import ActorCritic, Net
 from tianshou.utils.net.continuous import ActorProb, Critic
 from tianshou.env import DummyVectorEnv
 
-from market import GBMPriceSimulator
-from amm.amm import SimpleFeeAMM
-from amm.fee import PercentFee
-from AmmEnv import ArbitrageEnv
+from src.env.market import GBMPriceSimulator
+from src.amm.amm import SimpleFeeAMM
+from src.amm.fee import PercentFee
+from src.env.AmmEnv import ArbitrageEnv
 
 def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--task", type=str, default="ArbitrageEnv")
     parser.add_argument("--shares", type=int, default=10000)
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--buffer-size", type=int, default=4096)
+    parser.add_argument("--buffer-size", type=int, default=1000)
     parser.add_argument("--hidden-sizes", type=int, nargs="*", default=[64, 64])
     parser.add_argument("--lr", type=float, default=3e-4)
     parser.add_argument("--gamma", type=float, default=0.99)
-    parser.add_argument("--epoch", type=int, default=100)
-    parser.add_argument("--step-per-epoch", type=int, default=30000)
-    parser.add_argument("--step-per-collect", type=int, default=2048)
-    parser.add_argument("--repeat-per-collect", type=int, default=10)
-    parser.add_argument("--batch-size", type=int, default=64)
+    parser.add_argument("--epoch", type=int, default=1)
+    parser.add_argument("--step-per-epoch", type=int, default=10)
+    # "step-per-collect" determines how many steps to collect data
+    parser.add_argument("--step-per-collect", type=int, default=500)
+    # "repeat-per-collect" is only for on-policy, and it determines how many updates with the same batch of data
+    parser.add_argument("--repeat-per-collect", type=int, default=20)
+    parser.add_argument("--batch-size", type=int, default=50)
     parser.add_argument("--training-num", type=int, default=8)
     parser.add_argument("--test-num", type=int, default=10)
     parser.add_argument("--rew-norm", type=int, default=True)

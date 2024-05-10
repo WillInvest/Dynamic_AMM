@@ -1,7 +1,7 @@
 import numpy as np
 
 class GBMPriceSimulator:
-    def __init__(self, start_price=1.0, mu=0.1, sigma=0.5, epsilon=0.05, dt=0.01):
+    def __init__(self, start_price=1, mu=0.1, sigma=0.5, epsilon=0.0005, dt=0.01):
         self.initial_price = start_price  # Store the initial price
         self.initial_mu = mu  # Store the initial drift coefficient
         self.initial_sigma = sigma  # Store the initial volatility coefficient
