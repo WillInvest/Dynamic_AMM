@@ -211,12 +211,8 @@ class Critic:
 
         concatenation = Concatenate()([state_output, action_output])
 
-        fc = Dense(256, activation=tf.keras.activations.relu,
-                   kernel_initializer=tf.random_uniform_initializer(minval=-0.003, maxval=0.003)
-                   )(concatenation)
-        fc = Dense(256, activation=tf.keras.activations.relu,
-                   kernel_initializer=tf.random_uniform_initializer(minval=-0.003, maxval=0.003)
-                   )(fc)
+        fc = Dense(256, activation=tf.keras.activations.relu)(concatenation)
+        fc = Dense(256, activation=tf.keras.activations.relu)(fc)
         output = Dense(1, activation=None)(fc)
 
         network = tf.keras.Model(inputs=[state_input, action_input], outputs=output)
