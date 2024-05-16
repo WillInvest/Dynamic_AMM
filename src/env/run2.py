@@ -66,6 +66,8 @@ for episode_cnt in range(TOTAL_EPISODES):
         agent.update_online_network(state_batch, action_batch, reward_batch, next_state_batch)
         agent.update_target_network()
 
+        # commit test
+
         if done or step_cnt == MAX_STEPS_PER_EPISODE - 1:
             episode_return = sum(reward_list)
             wandb.log({"Episode": episode_cnt, "Episode Return": episode_return})
