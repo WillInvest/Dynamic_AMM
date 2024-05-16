@@ -203,17 +203,11 @@ class Critic:
 
     def _build_network(self, name=''):
         state_input = Input(shape=self.state.shape)
-        state_output = Dense(16, activation=tf.keras.activations.relu,
-                             kernel_initializer=tf.random_uniform_initializer(minval=-0.003, maxval=0.003)
-                             )(state_input)
-        state_output = Dense(32, activation=tf.keras.activations.relu,
-                             kernel_initializer=tf.random_uniform_initializer(minval=-0.003, maxval=0.003)
-                             )(state_output)
+        state_output = Dense(16, activation=tf.keras.activations.relu)(state_input)
+        state_output = Dense(32, activation=tf.keras.activations.relu)(state_output)
 
         action_input = Input(shape=ACTION_SHAPE)
-        action_output = Dense(32, activation=tf.keras.activations.relu,
-                              kernel_initializer=tf.random_uniform_initializer(minval=-0.003, maxval=0.003)
-                              )(action_input)
+        action_output = Dense(32, activation=tf.keras.activations.relu)(action_input)
 
         concatenation = Concatenate()([state_output, action_output])
 
