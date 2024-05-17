@@ -1,13 +1,12 @@
 import sys
 import os
 
-# sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# sys.path.append("..")
-
-from src.env.market import GBMPriceSimulator
-from src.amm.amm import AMM, SimpleFeeAMM
-from src.amm.fee import PercentFee
+from market import GBMPriceSimulator
+# from new_amm import AMM
+from amm.amm import AMM, SimpleFeeAMM
+from amm.fee import PercentFee
 # from amm.utils import parse_input
 from typing import Tuple
 import numpy as np
@@ -15,9 +14,9 @@ from gymnasium import spaces
 
 EPSILON = 1e-5
 
+
 def parse_input(string):
     return [float(ele) for ele in string.split(" ") if ele]
-
 
 
 class ArbitrageEnv:
@@ -32,54 +31,64 @@ class ArbitrageEnv:
         self.cum_pnl = 0.
         self.observation_space = spaces.Box(low=np.array([0., 0., 0., 0.], dtype=np.float32),
                                             high=np.array([np.inf, np.inf, np.inf, np.inf], dtype=np.float32))
-        self.action_space = spaces.Box(low=np.array([-1 + EPSILON, 0], dtype=np.float32),
-                                                           high=np.array([1 - EPSILON, 1]), dtype=np.float32)
+        self.action_space = spaces.Box(low=np.array([-1 + EPSILON], dtype=np.float32),
+                                       high=np.array([1 - EPSILON], dtype=np.float32), dtype=np.float32)
 
     # action: [trade_size_fraction, trade_decision (take opportunity when >0.5)]
 
-    def step(self, action: np.array) -> Tuple[
+    def step(self, actions: np.array) -> Tuple[
         np.array, float, bool, bool, dict]:  # next_obs, rew, done, truncated, info
-        trade_size_fraction, trade_prob = action
-        trade_size_fraction *= 0.2
-        # print(f"trade_size_fraction: {trade_size_fraction}, trade_prob: {trade_prob}")
-        # Transform the second action component to the range [0, 1]
-        # trade_prob = (action[1] + 1) / 2  # Mapping from [-1, 1] to [0, 1]
-        if trade_prob > 0.5:
-            if trade_size_fraction > 0:
-                asset_in, asset_out = 'B', 'A'
-            else:
-                asset_in, asset_out = 'A', 'B'
-            size = abs(trade_size_fraction) * self.amm.portfolio[asset_out]
-            # print(f"asset_in: {asset_in}, asset_out: {asset_out}, size: {size}")
-            success, info = self.amm.trade_swap(asset_in, asset_out, -size)  # take out -size shares of outing asset
-
+        trade_prob = 1
+        actions = actions * 0.1
+        if abs(trade_prob) > 0.5:
+            info = self.amm.swap(actions)
             # calculate the reward
             asset_delta = info['asset_delta']
             # print(asset_delta)
             fee = info['fee']
+            # print(f"fee: {fee} | asset_delta : {asset_delta}")
+
             amm_order_cost = asset_delta['B'] + fee['B']  # unit is always in B
             market_order_gain = (asset_delta['A'] + fee['A']) * (
                 self.market.get_bid_price() if asset_delta['A'] < 0 else self.market.get_ask_price())
             rew = - (market_order_gain + amm_order_cost)
-            print(f"asset_delta['A'] : {asset_delta['A']}, fee['A']: {fee['A']} | "
-                  f"asset_A : {self.amm.portfolio['A']} | asset_B : {self.amm.portfolio['B']} | ")
-            print(f"market_order_gain: {market_order_gain} | "
-                  f"amm_order_cost: {amm_order_cost} | "
-                  f"reward: {rew}")
+
+            #
+            # print(f"asset_delta['A'] : {asset_delta['A']}, fee['FA']: {fee['A']} | "
+            #       f"asset_delta['B']: {asset_delta['B']} | "
+            #       f"asset_A : {self.amm.reserve_a} | asset_B : {self.amm.reserve_b} | ")
+            # print(f"market_order_gain: {market_order_gain} | "
+            #       f"amm_order_cost: {amm_order_cost} | "
+            #       f"reward: {rew}")
+            # print(self.amm)
         else:
             success, info = True, {}
             rew = 0.
 
+        # print(f"portfolio A : {self.amm.portfolio['A']} | "
+        #       f"portfolio B : {self.amm.portfolio['B']} | "
+        #       f"minimum shares : {0.2 * self.shares} | "
+        #       f"terminated : {min(self.amm.portfolio['A'], self.amm.portfolio['B']) < 0.2 * self.shares}")
+        # print(f"action: {actions} | reward: {rew}")
+
+        # print(self.amm)
         done = False
-        if min(self.amm.portfolio['A'], self.amm.portfolio['B']) < 0.2 * self.shares:
+        if min(self.amm.reserve_a, self.amm.reserve_b) < 0.2 * self.shares:
             done = True
+            self.reset()
+            # print("terminated, start to reset")
+            # print(self.amm)
 
         self.cum_pnl += rew
         self.market.next()
 
         next_obs = self.get_obs()
 
-        return next_obs, rew, done, not success, {}
+        # Debug prints
+        # print(f"Reward: {rew}, Cumulative PnL: {self.cum_pnl}")
+        # print(f"Next observation: {next_obs}, Done: {done}")
+
+        return next_obs, rew, done, False, {}
 
     def reset(self):
         self.cum_pnl = 0
@@ -90,10 +99,8 @@ class ArbitrageEnv:
 
     def get_obs(self) -> np.array:
         cur_market_price = self.market.current_price
-        tmp = self.amm.portfolio
-        cur_amm_price = tmp['B'] / tmp['A']
-
-        return np.array([cur_market_price, cur_amm_price, tmp['A']/10000, tmp['B']/10000], dtype=np.float32)
+        cur_amm_price = self.amm.get_price()
+        return np.array([cur_market_price, cur_amm_price, self.amm.reserve_a/10000, self.amm.reserve_b / 10000], dtype=np.float32)
 
     def render(self, mode='human'):
         pass
@@ -101,17 +108,16 @@ class ArbitrageEnv:
 
 if __name__ == '__main__':
     market = GBMPriceSimulator()
-    amm_no_fee = SimpleFeeAMM(
-        utility_func="constant_product",
-        init_portfolio={'A': 10000, 'B': 10000, 'L': 10000},
-        fee_structure=PercentFee(0.0)
-    )
-    env = ArbitrageEnv(market, amm_no_fee)
+    fee1 = PercentFee(0.0)
+    # fee2 = TriangleFee(0.2, -1)
+    # amm = AMM()
+    amm = SimpleFeeAMM(fee_structure=fee1)
+    env = ArbitrageEnv(market, amm)
 
     # Reset the environment
     obs = env.reset()
     print(f"Initial observation: {obs}")
-
+    step = 0
     # Perform a few steps with sample actions
     for step in range(10):
         # Generate a random action
