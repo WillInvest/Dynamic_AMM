@@ -10,6 +10,8 @@ import torch.nn as nn
 from torch import Tensor
 from torch.distributions import Normal
 
+sys.path.append("..")
+
 from env.amm_env import ArbitrageEnv
 from env.market import GBMPriceSimulator
 from env.new_amm import AMM
@@ -180,6 +182,7 @@ class AgentDDPG(AgentBase):
         ary_state = self.last_state
         get_action = self.act.get_action
         for i in range(horizon_len):
+            # print(f"array_state: {ary_state}")
             state = torch.as_tensor(ary_state, dtype=torch.float32, device=self.device)
             action = torch.rand(self.action_dim) * 2 - 1.0 if if_random else get_action(state.unsqueeze(0)).squeeze(0)
 
@@ -188,7 +191,7 @@ class AgentDDPG(AgentBase):
             if i == horizon_len - 1:
                 done = True
             if done:
-                ary_state = env.reset()
+                ary_state, _ = env.reset()
                 
             reward = torch.as_tensor(reward, dtype=torch.float32, device=self.device)         
             states[i] = state
@@ -276,7 +279,7 @@ def train_agent(args: Config, USING_USD):
     amm = AMM(initial_a=10000, initial_b=10000, fee=fee_rate)
     env = ArbitrageEnv(market, amm, USD=USING_USD)
     agent = args.agent_class(args.net_dims, args.state_dim, args.action_dim, gpu_id=gpu_id, args=args)
-    agent.last_state = env.reset()
+    agent.last_state, _ = env.reset()
     buffer = ReplayBuffer(gpu_id=gpu_id, max_size=args.buffer_size,
                           state_dim=args.state_dim, action_dim=1 if args.if_discrete else args.action_dim, )
     buffer_items = agent.explore_env(env, args.horizon_len * 10, if_random=True)
@@ -319,6 +322,7 @@ class Evaluator:
         self.fee = fee
         self.epsilon = epsilon
         self.USD = USD
+        self.best_reward = 0.0
 
         self.recorder = []
         print("\n| `step`: Number of samples, or total training steps, or running times of `env.step()`."
@@ -367,7 +371,10 @@ class Evaluator:
         
         # Save the model
         save_directory = os.path.join(self.cwd, f"model_saves_step_{self.total_step}")
-        # save_model(actor, save_directory, self.total_step)
+        if avg_r > self.best_reward:
+            save_model(actor, save_directory, self.total_step)
+            self.best_reward = avg_r
+            
         
         
 def calculate_distance(amm_bid, amm_ask, market_bid, market_ask):
@@ -406,7 +413,7 @@ def plot_amm_market(amm_bid_step, amm_ask_step, market_bid, market_ask):
 def get_rewards_and_steps(env, actor, if_render: bool = False, fee_rate = 0.0, epsilon = 0.002, USD=True) -> (float, int):  # cumulative_rewards and episode_steps
     device = next(actor.parameters()).device  # net.parameters() is a Python generator.
 
-    state = env.reset()
+    state, _ = env.reset()
     episode_steps = 0
     cumulative_returns = 0.0  # sum of rewards in an episode
     distances = []
@@ -461,7 +468,7 @@ def generate_timestamp():
     # This function returns a formatted timestamp string
     return time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime())
 
-def train_ddpg_for_amm(gpu_id=0):
+def train_ddpg_for_amm(fee_rate, gpu_id=0):
     time_stamp = generate_timestamp()
     env_args = {
         'env_name': f'AMM_{time_stamp}',  # Apply torque on the free end to swing a pendulum into an upright position
@@ -475,7 +482,7 @@ def train_ddpg_for_amm(gpu_id=0):
     args.net_dims = (32, 32)  # the middle layer dimension of MultiLayer Perceptron
     args.gpu_id = gpu_id  # the ID of single GPU, -1 means CPU
     args.gamma = 0.95 # discount factor of future rewards
-    args.fee_rate = 0.02
+    args.fee_rate = fee_rate
     args.epsilon = 0.005
     args.mkt_start = 1
 
@@ -483,4 +490,4 @@ def train_ddpg_for_amm(gpu_id=0):
     
 
 if __name__ == "__main__":
-    train_ddpg_for_amm(gpu_id=int(sys.argv[1]) if len(sys.argv) > 1 else -1)
+    train_ddpg_for_amm(0.02)

@@ -15,6 +15,8 @@ class GBMPriceSimulator:
         self.mu = mu
         self.sigma = sigma
         self.epsilon = epsilon
+        self.sigmaA = 0.2
+        self.sigmaB = 0.1
         self.dt = dt
         self.deterministic = deterministic  # Flag to control stochastic/deterministic behavior
         self.shock_index = 0  # Index to track the current shock
@@ -146,9 +148,9 @@ class GBMPriceSimulator:
             shock2 = np.random.normal()
             # Update the current price using the GBM formula
             self.AP *= np.exp(
-                (self.mu - 0.5 * (self.sigma + 0.1) ** 2) * self.dt + self.sigma * np.sqrt(self.dt) * shock1)
+                (self.mu - 0.5 * self.sigmaA ** 2) * self.dt + self.sigmaA * np.sqrt(self.dt) * shock1)
             self.BP *= np.exp(
-                (self.mu - 0.5 * (self.sigma - 0.1) ** 2) * self.dt + self.sigma * np.sqrt(self.dt) * shock2)
+                (self.mu - 0.5 * self.sigmaB ** 2) * self.dt + self.sigmaB * np.sqrt(self.dt) * shock2)
 
         
 

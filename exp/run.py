@@ -10,8 +10,8 @@ import torch
 sys.path.append('..')
 
 
-from tianshou.data import Collector, ReplayBuffer, VectorReplayBuffer
-from tianshou.env.venvs import DummyVectorEnv
+from tianshou.data import Collector, ReplayBuffer, VectorReplayBuffer, PrioritizedVectorReplayBuffer, Batch
+from tianshou.env.venvs import DummyVectorEnv, SubprocVectorEnv
 from tianshou.exploration import GaussianNoise
 from tianshou.policy import DDPGPolicy
 from tianshou.policy.base import BasePolicy
@@ -26,21 +26,23 @@ from env.new_amm import AMM
 
 def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--task", type=str, default="Ant-v4")
+    parser.add_argument("--task", type=str, default="AMM")
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--buffer-size", type=int, default=1e5)
-    parser.add_argument("--hidden-sizes", type=int, nargs="*", default=[64, 32])
+    parser.add_argument("--alpha", type=float, default=0.5)
+    parser.add_argument("--beta", type=float, default=0.4)
+    parser.add_argument("--buffer-size", type=int, default=1e6)
+    parser.add_argument("--hidden-sizes", type=int, nargs="*", default=[64, 64])
     parser.add_argument("--actor-lr", type=float, default=1e-5)
     parser.add_argument("--critic-lr", type=float, default=1e-5)
     parser.add_argument("--gamma", type=float, default=0.95)
     parser.add_argument("--tau", type=float, default=0.0005)
     parser.add_argument("--exploration-noise", type=float, default=0.01)
-    parser.add_argument("--start-timesteps", type=int, default=1)
-    parser.add_argument("--epoch", type=int, default=1000)
+    parser.add_argument("--start-timesteps", type=int, default=25000)
+    parser.add_argument("--epoch", type=int, default=100)
     parser.add_argument("--step-per-epoch", type=int, default=5000)
-    parser.add_argument("--step-per-collect", type=int, default=500)
+    parser.add_argument("--step-per-collect", type=int, default=50)
     parser.add_argument("--update-per-step", type=int, default=1)
-    parser.add_argument("--n-step", type=int, default=1)
+    parser.add_argument("--n-step", type=int, default=3)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--training-num", type=int, default=1)
     parser.add_argument("--test-num", type=int, default=1)
@@ -72,8 +74,14 @@ def get_args() -> argparse.Namespace:
 
     return parser.parse_args()
 
+def create_env(market, amm, USD):
+    """Function to create and return a new environment."""
+    def _env():
+        return ArbitrageEnv(market, amm, USD=USD)
+    return _env
 
-def test_ddpg(args: argparse.Namespace = get_args()) -> None:
+def test_ddpg(fee_rate, args: argparse.Namespace = get_args()) -> None:
+    args.fee_rate = fee_rate
     market = GBMPriceSimulator(start_price=args.mkt_start, deterministic=False)
     fee_rate = args.fee_rate
     amm = AMM(initial_a=10000, initial_b=10000, fee=fee_rate)
@@ -122,27 +130,29 @@ def test_ddpg(args: argparse.Namespace = get_args()) -> None:
         estimation_step=args.n_step,
         action_space=env.action_space,
     )
-
     # load a previous policy
     if args.resume_path:
         policy.load_state_dict(torch.load(args.resume_path, map_location=args.device))
         print("Loaded agent from: ", args.resume_path)
 
     # collector
-    buffer: VectorReplayBuffer | ReplayBuffer
-    if args.training_num > 1:
-        buffer = VectorReplayBuffer(args.buffer_size, len(train_env))
-    else:
-        buffer = ReplayBuffer(args.buffer_size)
+    buffer = ReplayBuffer(
+        args.buffer_size,
+        # buffer_num=len(train_env),
+        # # ignore_obs_next=True,
+        # # save_only_last_obs=True,
+        # alpha=args.alpha,
+        # beta=args.beta,
+    )
     train_collector = Collector(policy, train_env, buffer, exploration_noise=True)
-    test_collector = Collector(policy, test_env)
+    test_collector = Collector(policy, test_env, exploration_noise=True)
     train_collector.reset()
     train_collector.collect(n_step=args.start_timesteps, random=True)
 
     # log
     now = datetime.datetime.now().strftime("%y%m%d-%H%M%S")
     args.algo_name = "ddpg"
-    log_name = os.path.join(args.task, args.algo_name, str(args.seed), now)
+    log_name = os.path.join(args.task, args.algo_name, str(args.fee_rate), now)
     log_path = os.path.join(args.logdir, log_name)
 
     # logger
@@ -162,6 +172,9 @@ def test_ddpg(args: argparse.Namespace = get_args()) -> None:
 
     def save_best_fn(policy: BasePolicy) -> None:
         torch.save(policy.state_dict(), os.path.join(log_path, "policy.pth"))
+        
+    def save_dist_fn(policy: BasePolicy) -> None:
+        torch.save(policy.state_dict(), os.path.join(log_path, "best_dist_policy.pth"))
 
     if not args.watch:
         # trainer
@@ -175,6 +188,7 @@ def test_ddpg(args: argparse.Namespace = get_args()) -> None:
             episode_per_test=args.test_num,
             batch_size=args.batch_size,
             save_best_fn=save_best_fn,
+            save_dist_fn=save_dist_fn,
             logger=logger,
             update_per_step=args.update_per_step,
             test_in_train=False,
@@ -190,4 +204,10 @@ def test_ddpg(args: argparse.Namespace = get_args()) -> None:
 
 
 if __name__ == "__main__":
-    test_ddpg()
+    
+    fee_rates = [0.02, 0.1, 0.5, 0.04, 0.06, 0.08, 0.2]
+    
+    for fee_rate in fee_rates:
+        for _ in range(5):
+            test_ddpg(fee_rate)
+        
