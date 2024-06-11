@@ -15,4 +15,4 @@ def train():
     os.system("python train.py")
 
 # Run the sweep agent
-wandb.agent(sweep_id, function=train, count=1)  # Adjust count as needed
+wandb.agent(sweep_id, function=train, count=64)  # Adjust count as needed

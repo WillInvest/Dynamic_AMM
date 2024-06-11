@@ -5,18 +5,18 @@ metric:
   goal: maximize
 parameters:
   learning_rate:
-    distribution: uniform
+    distribution: log_uniform_values
     min: 1e-5
     max: 1e-2
-  # buffer_size:
-  #   values: [5e5, 1e6, 2e6, 5e6]
-  # batch_size:
-  #   values: [64, 128, 256, 512]
-  # tau:
-  #   distribution: uniform
-  #   min: 1e-4
-  #   max: 1e-2
-  # gamma:
-  #   distribution: uniform
-  #   min: 0.9
-  #   max: 0.99
+  buffer_size:
+    values: [5e5, 1e6, 2e6, 5e6]
+  batch_size:
+    values: [64, 128, 256, 512]
+  tau:
+    distribution: log_uniform_values
+    min: 1e-4
+    max: 1e-2
+  gamma:
+    distribution: uniform
+    min: 0.9
+    max: 0.99
