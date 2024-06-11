@@ -9,13 +9,25 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 from torch.distributions import Normal
+import wandb
 
 sys.path.append("..")
 
-from env.amm_env import ArbitrageEnv
-from env.market import GBMPriceSimulator
+from env.uniswap_env import UniSwapEnv
+from env.market import MarketSimulator
 from env.new_amm import AMM
+from env.gas_fee import GasFeeSimulator
 import matplotlib.pyplot as plt
+
+def set_seed(seed):
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
 
 class Config:  # for off-policy
     def __init__(self, agent_class=None, env_class=None, env_args=None):
@@ -39,9 +51,9 @@ class Config:  # for off-policy
         self.net_dims = (64, 32)  # the middle layer dimension of MLP (MultiLayer Perceptron)
         self.learning_rate = 6e-5  # 2 ** -14 ~= 6e-5
         self.soft_update_tau = 5e-3  # 2 ** -8 ~= 5e-3
-        self.batch_size = int(64)  # num of transitions sampled from replay buffer.
-        self.horizon_len = int(512)  # collect horizon_len step while exploring, then update network
-        self.buffer_size = int(51200)  # ReplayBuffer size. First in first out for off-policy.
+        self.batch_size = int(500)  # num of transitions sampled from replay buffer.
+        self.horizon_len = int(500)  # collect horizon_len step while exploring, then update network
+        self.buffer_size = int(500000)  # ReplayBuffer size. First in first out for off-policy.
         self.repeat_times = 1.0  # repeatedly update network using ReplayBuffer to keep critic's loss small
 
         '''Arguments for device'''
@@ -55,29 +67,42 @@ class Config:  # for off-policy
         self.break_step = +np.inf  # break training if 'total_step > break_step'
 
         self.eval_times = int(1)  # number of times that get episodic cumulative return
-        self.eval_per_step = int(1024)  # evaluate the agent per training steps
+        self.eval_per_step = int(1000)  # evaluate the agent per training steps
 
     def init_before_training(self):
         if self.cwd is None:  # set cwd (current working directory) for saving model
-            self.cwd = f'{self.env_name}_{self.agent_class.__name__[5:]}'
-        os.makedirs(self.cwd, exist_ok=True)
+            self.cwd = f'{self.env_name}_{self.agent_class.__name__[5:]}_{self.seed}'
+        # os.makedirs(self.cwd, exist_ok=True)
 
 
 class Actor(nn.Module):
     def __init__(self, dims: [int], state_dim: int, action_dim: int):
         super().__init__()
         self.net = build_mlp(dims=[state_dim, *dims, action_dim])
-        self.explore_noise_std = None  # standard deviation of exploration action noise
+        # Set default standard deviations for exploration noise for each action dimension
+        self.explore_noise_std_0 = 0.1  # For the bounded action
+        self.explore_noise_std_1 = 0.1  # For the unbounded action
 
     def forward(self, state: Tensor) -> Tensor:
         action = self.net(state)
-        return action.tanh()
+        # Apply tanh to the first dimension to bound it between [-1, 1]
+        action[:, 0] = torch.tanh(action[:, 0])
+        # Apply sigmoid to the second dimension to bound it between [0, 1]
+        action[:, 1] = torch.sigmoid(action[:, 1])
+        return action
 
     def get_action(self, state: Tensor) -> Tensor:  # for exploration
-        action_avg = self.net(state).tanh()
-        dist = Normal(action_avg, self.explore_noise_std)
-        action = dist.sample()
-        return action.clip(-1.0, 1.0)
+        action_avg = self.forward(state)
+        # Create different normal distributions for each action dimension
+        dist_0 = Normal(action_avg[:, 0], self.explore_noise_std_0)
+        dist_1 = Normal(action_avg[:, 1], self.explore_noise_std_1)
+        # Sample from the distributions
+        action_0 = dist_0.sample().clamp(-1.0, 1.0)  # Apply clipping to the first action dimension only
+        action_1 = dist_1.sample()  # No clipping for the second action dimension
+        # Concatenate the actions along the correct dimension
+        action = torch.cat((action_0.unsqueeze(1), action_1.unsqueeze(1)), dim=1)
+        return action
+
 
 
 class Critic(nn.Module):
@@ -137,15 +162,20 @@ class AgentBase:
 
         self.last_state = None  # save the last state of the trajectory for training. `last_state.shape == (state_dim)`
         self.device = torch.device(f"cuda:{gpu_id}" if (torch.cuda.is_available() and (gpu_id >= 0)) else "cpu")
-        print(f"device: {self.device}")
         act_class = getattr(self, "act_class", None)
         cri_class = getattr(self, "cri_class", None)
-        self.act = self.act_target = act_class(net_dims, state_dim, action_dim).to(self.device)
-        self.cri = self.cri_target = cri_class(net_dims, state_dim, action_dim).to(self.device) \
+        self.act1 = self.act_target1 = act_class(net_dims, state_dim, action_dim).to(self.device)
+        self.cri1 = self.cri_target1 = cri_class(net_dims, state_dim, action_dim).to(self.device) \
+            if cri_class else self.act
+        self.act2 = self.act_target2 = act_class(net_dims, state_dim, action_dim).to(self.device)
+        self.cri2 = self.cri_target2 = cri_class(net_dims, state_dim, action_dim).to(self.device) \
             if cri_class else self.act
 
-        self.act_optimizer = torch.optim.Adam(self.act.parameters(), self.learning_rate)
-        self.cri_optimizer = torch.optim.Adam(self.cri.parameters(), self.learning_rate) \
+        self.act_optimizer1 = torch.optim.Adam(self.act1.parameters(), self.learning_rate)
+        self.cri_optimizer1 = torch.optim.Adam(self.cri1.parameters(), self.learning_rate) \
+            if cri_class else self.act_optimizer
+        self.act_optimizer2 = torch.optim.Adam(self.act2.parameters(), self.learning_rate)
+        self.cri_optimizer2 = torch.optim.Adam(self.cri2.parameters(), self.learning_rate) \
             if cri_class else self.act_optimizer
 
         self.criterion = torch.nn.SmoothL1Loss()
@@ -168,68 +198,100 @@ class AgentDDPG(AgentBase):
         self.act_class = getattr(self, 'act_class', Actor)  # get the attribute of object `self`, set Actor in default
         self.cri_class = getattr(self, 'cri_class', Critic)  # get the attribute of object `self`, set Critic in default
         AgentBase.__init__(self, net_dims, state_dim, action_dim, gpu_id, args)
-        self.act_target = deepcopy(self.act)
-        self.cri_target = deepcopy(self.cri)
-
-        self.act.explore_noise_std = getattr(args, 'explore_noise', 0.1)  # set for `self.act.get_action()`
+        self.act_target1 = deepcopy(self.act1)
+        self.cri_target1 = deepcopy(self.cri1)
+        self.act_target2 = deepcopy(self.act2)
+        self.cri_target2 = deepcopy(self.cri2)
 
     def explore_env(self, env, horizon_len: int, if_random: bool = False) -> [Tensor]:
         states = torch.zeros((horizon_len, self.state_dim), dtype=torch.float32).to(self.device)
-        actions = torch.zeros((horizon_len, self.action_dim), dtype=torch.float32).to(self.device)
-        rewards = torch.zeros(horizon_len, dtype=torch.float32).to(self.device)
+        actions1 = torch.zeros((horizon_len, self.action_dim), dtype=torch.float32).to(self.device)
+        rewards1 = torch.zeros((horizon_len, 1), dtype=torch.float32).to(self.device)
+        actions2 = torch.zeros((horizon_len, self.action_dim), dtype=torch.float32).to(self.device)
+        rewards2 = torch.zeros((horizon_len, 1), dtype=torch.float32).to(self.device)
         dones = torch.zeros(horizon_len, dtype=torch.bool).to(self.device)
 
         ary_state = self.last_state
-        get_action = self.act.get_action
-        for i in range(horizon_len):
-            # print(f"array_state: {ary_state}")
-            state = torch.as_tensor(ary_state, dtype=torch.float32, device=self.device)
-            action = torch.rand(self.action_dim) * 2 - 1.0 if if_random else get_action(state.unsqueeze(0)).squeeze(0)
+        # get_action1 = self.act1.get_action
+        # get_action2 = self.act2.get_action
 
-            ary_action = action.detach().cpu().numpy()
-            ary_state, reward, done, truncated, _ = env.step(ary_action)
+        for i in range(horizon_len):
+            state = torch.as_tensor(ary_state, dtype=torch.float32, device=self.device)
+            action1 = (torch.rand(self.action_dim) * 2 - 1.0).unsqueeze(0) if if_random else self.act1.get_action(state.unsqueeze(0))
+            action2 = (torch.rand(self.action_dim) * 2 - 1.0).unsqueeze(0) if if_random else self.act1.get_action(state.unsqueeze(0))
+
+            ary_action1 = action1.detach().cpu().numpy()[0]
+            ary_action2 = action2.detach().cpu().numpy()[0]
+            
+            ary_state, reward1, reward2, done, truncated, _ = env.step(ary_action1, ary_action2)
             if i == horizon_len - 1:
                 done = True
             if done:
                 ary_state, _ = env.reset()
-                
-            reward = torch.as_tensor(reward, dtype=torch.float32, device=self.device)         
+
+            # Direct insertion of rewards is fine since they are already 2D tensors
+            rewards1[i] = reward1
+            rewards2[i] = reward2
+
             states[i] = state
-            actions[i] = action
-            rewards[i] = reward
+            actions1[i] = action1
+            actions2[i] = action2
             dones[i] = done
 
         self.last_state = ary_state
-        rewards = rewards.unsqueeze(1)
         undones = (1.0 - dones.type(torch.float32)).unsqueeze(1)
-        return states, actions, rewards, undones
+        return [states, actions1, rewards1, undones], [states, actions2, rewards2, undones]
 
-    def update_net(self, buffer) -> [float]:
-        obj_critics = obj_actors = 0.0
-        update_times = int(buffer.cur_size * self.repeat_times / self.batch_size)
+    def update_net(self, buffer1, buffer2) -> [float]:
+        obj_critics1 = obj_actors1 = obj_critics2 = obj_actors2 = 0.0
+        update_times = int(self.batch_size)
         assert update_times > 0
         for i in range(update_times):
-            obj_critic, state = self.get_obj_critic(buffer, self.batch_size)
-            self.optimizer_update(self.cri_optimizer, obj_critic)
-            self.soft_update(self.cri_target, self.cri, self.soft_update_tau)
-            obj_critics += obj_critic.item()
+            obj_critic1, obj_critic2, state1, state2 = self.get_obj_critic(buffer1, buffer2, self.batch_size)
 
-            action = self.act(state)
-            obj_actor = self.cri_target(state, action).mean()
-            self.optimizer_update(self.act_optimizer, -obj_actor)
-            self.soft_update(self.act_target, self.act, self.soft_update_tau)
-            obj_actors += obj_actor.item()
-        return obj_critics / update_times, obj_actors / update_times
+            self.optimizer_update(self.cri_optimizer1, obj_critic1)
+            self.optimizer_update(self.cri_optimizer2, obj_critic2)
 
-    def get_obj_critic(self, buffer, batch_size: int) -> (Tensor, Tensor):
+            self.soft_update(self.cri_target1, self.cri1, self.soft_update_tau)
+            self.soft_update(self.cri_target2, self.cri2, self.soft_update_tau)
+
+            obj_critics1 += obj_critic1.item()
+            obj_critics2 += obj_critic2.item()
+
+            action1 = self.act1(state1)
+            action2 = self.act2(state2)
+
+            obj_actor1 = self.cri_target1(state1, action1).mean()
+            obj_actor2 = self.cri_target2(state2, action2).mean()
+
+            self.optimizer_update(self.act_optimizer1, -obj_actor1)
+            self.optimizer_update(self.act_optimizer2, -obj_actor2)
+
+            self.soft_update(self.act_target1, self.act1, self.soft_update_tau)
+            self.soft_update(self.act_target2, self.act2, self.soft_update_tau)
+
+            obj_actors1 += obj_actor1.item()
+            obj_actors2 += obj_actor2.item()
+
+        return [obj_critics1 / update_times, obj_actors1 / update_times], [obj_critics2 / update_times, obj_actors2 / update_times] 
+
+    def get_obj_critic(self, buffer1, buffer2, batch_size: int):
         with torch.no_grad():
-            states, actions, rewards, undones, next_states = buffer.sample(batch_size)
-            next_actions = self.act_target(next_states)
-            next_q_values = self.cri_target(next_states, next_actions)
-            q_labels = rewards + undones * self.gamma * next_q_values
-        q_values = self.cri(states, actions)
-        obj_critic = self.criterion(q_values, q_labels)
-        return obj_critic, states
+            states1, actions1, rewards1, undones1, next_states1 = buffer1.sample(batch_size)
+            next_actions1 = self.act_target1(next_states1)
+            next_q_values1 = self.cri_target1(next_states1, next_actions1)
+            q_labels1 = rewards1 + undones1 * self.gamma * next_q_values1
+            states2, actions2, rewards2, undones2, next_states2 = buffer2.sample(batch_size)
+            next_actions2 = self.act_target2(next_states2)
+            next_q_values2 = self.cri_target2(next_states2, next_actions2)
+            q_labels2 = rewards2 + undones2 * self.gamma * next_q_values2
+
+        q_values1 = self.cri1(states1, actions1)
+        obj_critic1 = self.criterion(q_values1, q_labels1)
+        q_values2 = self.cri2(states2, actions2)
+        obj_critic2 = self.criterion(q_values2, q_labels2)
+        
+        return obj_critic1, obj_critic2, states1, states2
 
 
 class ReplayBuffer:  # for off-policy
@@ -271,47 +333,54 @@ class ReplayBuffer:  # for off-policy
         ids = torch.randint(self.cur_size - 1, size=(batch_size,), requires_grad=False)
         return self.states[ids], self.actions[ids], self.rewards[ids], self.undones[ids], self.states[ids + 1]
 
-def train_agent(args: Config, USING_USD):
+def train_agent(args: Config):
     args.init_before_training()
     gpu_id = 0
-    market = GBMPriceSimulator(start_price=args.mkt_start, deterministic=False)
+    market = MarketSimulator(start_price=args.mkt_start, deterministic=False)
     fee_rate = args.fee_rate
     amm = AMM(initial_a=10000, initial_b=10000, fee=fee_rate)
-    env = ArbitrageEnv(market, amm, USD=USING_USD)
+    gas = GasFeeSimulator()
+    env = UniSwapEnv(market, amm, gas)
     agent = args.agent_class(args.net_dims, args.state_dim, args.action_dim, gpu_id=gpu_id, args=args)
     agent.last_state, _ = env.reset()
-    buffer = ReplayBuffer(gpu_id=gpu_id, max_size=args.buffer_size,
+    buffer1 = ReplayBuffer(gpu_id=gpu_id, max_size=args.buffer_size,
                           state_dim=args.state_dim, action_dim=1 if args.if_discrete else args.action_dim, )
-    buffer_items = agent.explore_env(env, args.horizon_len * 10, if_random=True)
-    buffer.update(buffer_items)  # warm up for ReplayBuffer
-    eval_market = GBMPriceSimulator(start_price=args.mkt_start, deterministic=True)
-    eval_amm = AMM(initial_a=10000, initial_b=10000, fee=fee_rate)
-    eval_env = ArbitrageEnv(eval_market, eval_amm, USD=USING_USD)
+    buffer2 = ReplayBuffer(gpu_id=gpu_id, max_size=args.buffer_size,
+                          state_dim=args.state_dim, action_dim=1 if args.if_discrete else args.action_dim, )
+    buffer_items1, buffer_items2 = agent.explore_env(env, args.batch_size * 100, if_random=True)
+    buffer1.update(buffer_items1)  # warm up for ReplayBuffer
+    buffer2.update(buffer_items2)  # warm up for ReplayBuffer
+    eval_market = MarketSimulator(start_price=args.mkt_start, deterministic=args.deterministic)
+    eval_env = UniSwapEnv(eval_market, amm, gas)
     evaluator = Evaluator(eval_env=eval_env,
-                          eval_per_step=args.eval_per_step, eval_times=args.eval_times, cwd=args.cwd, fee=fee_rate, epsilon=args.epsilon, USD=USING_USD)
+                          eval_per_step=args.eval_per_step, eval_times=args.eval_times, cwd=args.cwd, fee=fee_rate, epsilon=args.epsilon)
     torch.set_grad_enabled(False)
     while True:  # start training
-        buffer_items = agent.explore_env(env, args.horizon_len)
-        buffer.update(buffer_items)
+        buffer_items1, buffer_items2 = agent.explore_env(env, args.horizon_len)
+        buffer1.update(buffer_items1)
+        buffer2.update(buffer_items2)
 
         torch.set_grad_enabled(True)
-        logging_tuple = agent.update_net(buffer)
+        logging_tuple1, logging_tuple2 = agent.update_net(buffer1, buffer2)
         torch.set_grad_enabled(False)
 
-        evaluator.evaluate_and_save(agent.act, args.horizon_len, logging_tuple)
+        evaluator.evaluate_and_save(agent.act1, agent.act2, args.horizon_len, logging_tuple1, logging_tuple2, saving_name=args.saving_name)
         if (evaluator.total_step > args.break_step) or os.path.exists(f"{args.cwd}/stop"):
             break  # stop training when reach `break_step` or `mkdir cwd/stop`
 
-def save_model(actor, directory, step_count):
-    directory = f'./saved_model/{directory}'
+def save_model(actor1, actor2, directory, step_count, fee_rate, saving_name):
+    directory = f'./{saving_name}/{fee_rate:.2f}/{directory}'
     if not os.path.exists(directory):
         os.makedirs(directory)
-    filepath = os.path.join(directory, f"actor_step_{step_count}.pth")
-    torch.save(actor.state_dict(), filepath)
+    filepath1 = os.path.join(directory, f"actor1.pth")
+    filepath2 = os.path.join(directory, f"actor2.pth")
+
+    torch.save(actor1.state_dict(), filepath1)
+    torch.save(actor2.state_dict(), filepath2)
     # print(f"Model saved to {filepath}")
     
 class Evaluator:
-    def __init__(self, eval_env, eval_per_step: int = 1e4, eval_times: int = 8, cwd: str = '.', fee: float = 0.0, epsilon: float = 0.002, USD=False):
+    def __init__(self, eval_env, eval_per_step: int = 1e4, eval_times: int = 8, cwd: str = '.', fee: float = 0.0, epsilon: float = 0.002):
         self.cwd = cwd
         self.env_eval = eval_env
         self.eval_step = 0
@@ -321,20 +390,38 @@ class Evaluator:
         self.eval_per_step = eval_per_step  # evaluate the agent per training steps
         self.fee = fee
         self.epsilon = epsilon
-        self.USD = USD
-        self.best_reward = 0.0
+        self.best_reward = -1e6
+        self.best_reward_step = 0
 
         self.recorder = []
-        print("\n| `step`: Number of samples, or total training steps, or running times of `env.step()`."
-              "\n| `time`: Time spent from the start of training to this moment."
-              "\n| `avgR`: Average value of cumulative rewards, which is the sum of rewards in an episode."
-              "\n| `stdR`: Standard dev of cumulative rewards, which is the sum of rewards in an episode."
-              "\n| `avgS`: Average of steps in an episode."
-              "\n| `objC`: Objective of Critic network. Or call it loss function of critic network."
-              "\n| `objA`: Objective of Actor network. It is the average Q value of the critic network."
-              f"\n| {'step':>8}  {'time':>8}  | {'avgR':>8}  {'stdR':>6}  {'avgS':>6}  | {'avgD':>8}  {'stdD':>6}   | {'objC':>8}  {'objA':>8}")
+        # Initialize wandb
+        wandb.init(project="AMM_Multiple_Agent_DDPG")
+        # Description of the metrics
+        description = (
+            "\n| `total_steps`: Number of samples, or total training steps, or running times of `env.step()`."
+            "\n| `average_steps`: Average step for episodes"
+            "\n| `avgR`: Average value of cumulative rewards, which is the sum of rewards in an episode."
+            "\n| `bestR`: Best reward in all episodes."
+            "\n| `bestR_step`: Totals steps that generate the best reward."
+            "\n| `objC1`: Objective of Critic network1. Or call it loss function of critic network1."
+            "\n| `objC2`: Objective of Critic network2. Or call it loss function of critic network2."
+            "\n| `objA1`: Objective of Actor network1. It is the average Q value of the critic network1."
+            "\n| `objA2`: Objective of Actor network2. It is the average Q value of the critic network2."
+        )
 
-    def evaluate_and_save(self, actor, horizon_len: int, logging_tuple: tuple):
+        # Print the description
+        print(description)
+
+        # Header for the data
+        header = (
+            f"\n| {'total_steps':>12} | {'avg_steps':>12} | {'avgR':>12} | {'bestR':>12} | {'bestR_step':>12} | "
+            f"{'objC1':>12} | {'objC2':>12} | {'objA1':>12} | {'objA2':>12} |"
+        )
+
+        # Print the header
+        print(header)
+
+    def evaluate_and_save(self, actor1, actor2, horizon_len: int, logging_tuple1: tuple, logging_tuple2: tuple, saving_name):
         self.total_step += horizon_len
         fee_rate = self.fee
         if self.eval_step + self.eval_per_step > self.total_step:
@@ -344,9 +431,9 @@ class Evaluator:
         results = []
         distances = []
         for _ in range(self.eval_times):
-            rewards, steps, distance = get_rewards_and_steps(self.env_eval, actor, fee_rate, self.epsilon, USD=self.USD)
+            rewards, steps, distance = get_rewards_and_steps(self.env_eval, actor1, actor2, fee_rate, self.epsilon)
             # Extract the first element from the rewards array
-            results.append([rewards[0], steps])
+            results.append([rewards, steps])
             distances.append(distance)
 
         results_array = np.array(results, dtype=np.float32)
@@ -364,54 +451,39 @@ class Evaluator:
         used_time = time.time() - self.start_time
         self.recorder.append((self.total_step, used_time, avg_r))
 
-        print(f"| {self.total_step:8.2e}  {used_time:8.0f}  "
-              f"| {avg_r:8.2f}  {std_r:6.2f}  {avg_s:6.0f}  "
-              f"| {avg_d:8.2f}  {std_d:6.2f}    "
-              f"| {logging_tuple[0]:8.2f}  {logging_tuple[1]:8.2f}")
+        # Data for the metrics
+        data = (
+            f"| {self.total_step:12.2e} | {avg_s:12.2f} | {avg_r:12.2f} | {self.best_reward:12.2f} | "
+            f"{self.best_reward_step:12.2f} | {logging_tuple1[0]:12.2f} | {logging_tuple2[0]:12.2f} | "
+            f"{logging_tuple1[1]:12.2f} | {logging_tuple2[1]:12.2f} |"
+        )
+
+        # Print the data
+        print(data)
+    
+        # Log metrics to wandb
+        wandb.log({
+            "total_steps": self.total_step,
+            "avg_steps": avg_s,
+            "avgR": avg_r,
+            "bestR": self.best_reward,
+            "bestR_step": self.best_reward_step,
+            "objC1": logging_tuple1[0],
+            "objC2": logging_tuple2[0],
+            "objA1": logging_tuple1[1],
+            "objA2": logging_tuple2[1],
+        })
         
         # Save the model
         save_directory = os.path.join(self.cwd, f"model_saves_step_{self.total_step}")
         if avg_r > self.best_reward:
-            save_model(actor, save_directory, self.total_step)
+            save_model(actor1, actor2, save_directory, self.total_step, fee_rate=self.fee, saving_name=saving_name)
             self.best_reward = avg_r
+            self.best_reward_step = self.total_step
             
-        
-        
-def calculate_distance(amm_bid, amm_ask, market_bid, market_ask):
-    if amm_bid > market_ask:
-        # Non-overlapping: AMM higher than market
-        distance = amm_bid - market_ask
-    elif amm_ask < market_bid:
-        # Non-overlapping: AMM lower than market
-        distance = market_bid - amm_ask
-    else:
-        # Overlapping
-        if amm_ask < market_ask:
-            distance = amm_ask - market_bid
-        else:
-            distance = market_ask - amm_bid
-            
-    return distance
 
-def plot_amm_market(amm_bid_step, amm_ask_step, market_bid, market_ask):
-     # Plotting the prices
-    steps = len(amm_ask_step)
-    plt.figure(figsize=(10, 10))
-    plt.plot(market_ask, label='Market Ask', color='red')
-    plt.plot(market_bid, label='Market Bid', color='blue')
-    plt.step(np.arange(steps), amm_ask_step, where='mid', label='AMM Ask', linestyle='--', color='red')
-    plt.step(np.arange(steps), amm_bid_step, where='mid', label='AMM Bid', linestyle='--', color='blue')
-    plt.title('Bid and Ask Ratios')
-    plt.xlabel('Step')
-    plt.ylabel('Ratio')
-    plt.legend()
-    plt.grid(True)
-    plt.show()
-    plt.pause(0.1)  # Display the plot for 0.1 seconds
-    plt.close()  # Close the plot window
-
-def get_rewards_and_steps(env, actor, if_render: bool = False, fee_rate = 0.0, epsilon = 0.002, USD=True) -> (float, int):  # cumulative_rewards and episode_steps
-    device = next(actor.parameters()).device  # net.parameters() is a Python generator.
+def get_rewards_and_steps(env, actor1, actor2, if_render: bool = False, fee_rate = 0.0, epsilon = 0.002) -> (float, int):  # cumulative_rewards and episode_steps
+    device = next(actor1.parameters()).device  # net.parameters() is a Python generator.
 
     state, _ = env.reset()
     episode_steps = 0
@@ -422,42 +494,24 @@ def get_rewards_and_steps(env, actor, if_render: bool = False, fee_rate = 0.0, e
     market_bids = []
     market_asks = []
     
-    for episode_steps in range(50):
+    for episode_steps in range(500):
         tensor_state = torch.as_tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
-        tensor_action = actor(tensor_state)
-        action = tensor_action.detach().cpu().numpy()[0]  # not need detach(), because using torch.no_grad() outside
-        state, reward, done, truncated, _ = env.step(action)
-        cumulative_returns += reward
-        if USD:
-            ammMid = state[1] #/ state[0]
-            ammBid = ammMid / (1 + fee_rate)
-            ammAsk = ammMid * (1 + fee_rate)
-            amm_bids.append(ammBid)
-            amm_asks.append(ammAsk)
-            # askA = state[2] * (1 + 2 * epsilon)
-            # askB = state[3] * (1 + epsilon)
-            # bidA = state[2] / (1 + 2 * epsilon)
-            # bidB = state[3] / (1 + epsilon)
-            # ask_ratio = askA / bidB
-            # bid_ratio = bidA / askB
-            ask_ratio = state[0] * (1+epsilon)
-            bid_ratio = state[0] / (1+epsilon)
-            market_asks.append(ask_ratio)
-            market_bids.append(bid_ratio)
+        tensor_action1 = actor1(tensor_state)
+        tensor_action2 = actor2(tensor_state)
+        action1 = tensor_action1.detach().cpu().numpy()[0]  # not need detach(), because using torch.no_grad() outside
+        action2 = tensor_action2.detach().cpu().numpy()[0]  # not need detach(), because using torch.no_grad() outside
+        state, reward1, reward2, done, truncated, _ = env.step(action1, action2)
+        cumulative_returns += reward1 + reward2
+        ammMid = state[1] 
+        ammBid = ammMid / (1 + fee_rate)
+        ammAsk = ammMid * (1 + fee_rate)
+        amm_bids.append(ammBid)
+        amm_asks.append(ammAsk)
+        ask_ratio = state[0] * (1+epsilon)
+        bid_ratio = state[0] / (1+epsilon)
+        market_asks.append(ask_ratio)
+        market_bids.append(bid_ratio)
 
-        else:
-            ammAsk = state[1] * (1+fee_rate)
-            ammBid = state[1] / (1+fee_rate)
-            amm_bids.append(ammBid)
-            amm_asks.append(ammAsk)
-            ask_ratio = state[0] * (1+epsilon)
-            bid_ratio = state[0] / (1+epsilon)
-            market_asks.append(ask_ratio)
-            market_bids.append(bid_ratio)
-            
-        distances.append(calculate_distance(amm_ask=ammAsk, amm_bid=ammBid, market_ask=ask_ratio, market_bid=bid_ratio))
-        if if_render:
-            env.render()
         if done:
             break
     # plot_amm_market(amm_bid_step, amm_ask_step, market_bids, market_asks)
@@ -468,26 +522,36 @@ def generate_timestamp():
     # This function returns a formatted timestamp string
     return time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime())
 
-def train_ddpg_for_amm(fee_rate, gpu_id=0):
-    time_stamp = generate_timestamp()
+def train_ddpg_for_amm(fee_rate, seed, gpu_id=0):
     env_args = {
-        'env_name': f'AMM_{time_stamp}',  # Apply torque on the free end to swing a pendulum into an upright position
-        'state_dim': 2,  # the x-y coordinates of the pendulum's free end and its angular velocity.
-        'action_dim': 1,  # the torque applied to free end of the pendulum
+        'env_name': f'AMM',  # Apply torque on the free end to swing a pendulum into an upright position
+        'state_dim': 3,  # the x-y coordinates of the pendulum's free end and its angular velocity.
+        'action_dim': 2,  # the torque applied to free end of the pendulum
         'if_discrete': False  # continuous action space, symbols → direction, value → force
     }  # env_args = get_gym_env_args(env=gym.make('CartPole-v0'), if_print=True)
 
-    args = Config(agent_class=AgentDDPG, env_class=ArbitrageEnv, env_args=env_args)  # see `Config` for explanation
+    args = Config(agent_class=AgentDDPG, env_class=UniSwapEnv, env_args=env_args)  # see `Config` for explanation
     args.break_step = int(1e8)  # break training if 'total_step > break_step'
-    args.net_dims = (32, 32)  # the middle layer dimension of MultiLayer Perceptron
+    args.net_dims = (256, 256)  # the middle layer dimension of MultiLayer Perceptron
     args.gpu_id = gpu_id  # the ID of single GPU, -1 means CPU
     args.gamma = 0.95 # discount factor of future rewards
     args.fee_rate = fee_rate
     args.epsilon = 0.005
     args.mkt_start = 1
+    args.seed = seed
+    args.saving_name = 'saved_model_multiple_agents_random'
+    args.deterministic = False
 
-    train_agent(args, USING_USD=False)
+    train_agent(args)
     
 
 if __name__ == "__main__":
-    train_ddpg_for_amm(0.02)
+    # rates = [0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.15, 0.2, 0.4]
+    # rates = [0.11, 0.12, 0.13, 0.14, 0.15, 0.16, 0.17, 0.18, 0.19, 0.21, 0.22, 0.23]
+    # rates = np.arange(0.01, 0.24, 0.01)
+    # rates = [0.24, 0.25, 0.26, 0.27, 0.28, 0.29, 0.30, 0.31, 0.32, 0.33, 0.34, 0.35, 0.36, 0.37, 0.38, 0.39, 0.40]
+    rates = np.arange(0.01, 0.11, 0.01)
+    for rate in rates:
+        for seed in range(5):
+            set_seed(seed=seed)
+            train_ddpg_for_amm(fee_rate=rate, seed=seed)
