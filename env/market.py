@@ -1,9 +1,10 @@
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 
 
-class GBMPriceSimulator:
-    def __init__(self, start_price=100, mu=0.1, sigma=0.5, epsilon=0.01, dt=0.01, deterministic=False, random=False):
+class MarketSimulator:
+    def __init__(self, start_price=100, mu=0.1, sigma=0.5, epsilon=0.01, dt=0.01, deterministic=False, random=False, steps=500):
         self.initial_price = start_price
         self.initial_mu = mu
         self.initial_sigma = sigma
@@ -15,45 +16,16 @@ class GBMPriceSimulator:
         self.mu = mu
         self.sigma = sigma
         self.epsilon = epsilon
-        self.sigmaA = 0.2
-        self.sigmaB = 0.1
+        self.sigmaA = sigma
+        self.sigmaB = self.sigmaA/2
         self.dt = dt
         self.deterministic = deterministic  # Flag to control stochastic/deterministic behavior
         self.shock_index = 0  # Index to track the current shock
-        # self.pathA = self.get_zigzag(1.5, 0.5, 1.2, 0.8, random=random)
-        # self.pathB = self.get_zigzag(1.2, 0.8, 1.1, 0.9, random=random)
-        self.pathA = self.get_zigzag(1.5, 0.5)
-        self.pathB = self.get_zigzag(1.2, 0.8)
+        self.steps = steps
+        self.pathA = self.get_zigzag(steps=self.steps, high=1.5, low=0.5)
+        self.pathB = self.get_zigzag(steps=self.steps, high=1.2, low=0.8)
         
-    def generate_gbm_series(self, S0, mu, sigma, T, dt, n_series):
-        """
-        Generate multiple GBM series.
-
-        Parameters:
-        S0 (float): Initial stock price.
-        mu (float): Drift coefficient.
-        sigma (float): Volatility coefficient.
-        T (int): Total time in years.
-        dt (float): Time step in years.
-        n_series (int): Number of GBM series to generate.
-
-        Returns:
-        np.array: A numpy array containing GBM paths.
-        """
-        n_steps = int(T / dt)  # Number of time steps
-        timesteps = np.linspace(0, T, n_steps)
-        S = np.zeros((n_steps, n_series))
-        S[0] = S0
-
-        for t in range(1, n_steps):
-            Z = np.random.normal(0, 1, n_series)
-            S[t] = S[t - 1] * np.exp((mu - 0.5 * sigma**2) * dt + sigma * np.sqrt(dt) * Z)
-
-        return S
-        
-    def get_zigzag(self, high, low):
-        # total steps
-        steps = 50
+    def get_zigzag(self, steps, high, low):
         
         # Define the basic zigzag pattern: rise to 1.5, drop to 0.5, return to 1
         rise_steps = steps // 3
@@ -71,52 +43,6 @@ class GBMPriceSimulator:
         
         # Concatenate the sequences to form the full zigzag pattern
         return np.concatenate((rise_sequence, drop_sequence, return_sequence))
-        
-    # def get_zigzag(self, high1, low1, high2, low2, random=False):
-    #     # total steps
-    #     steps = 500
-
-        
-    #     # if random:
-    #     #     # Parameters
-    #     #     S0 = 100         # Initial price
-    #     #     mu = 0.05        # Drift coefficient
-    #     #     sigma = 0.2      # Volatility
-    #     #     T = 1            # Total time in years
-    #     #     dt = 0.002        # Time step in years
-
-    #     #     # Generate the GBM series
-    #     #     gbm_series = self.generate_gbm_series(S0, mu, sigma, T, dt, 1)
-            
-    #     #     return gbm_series
-        
-    #     # else:
-    #     # Define the basic zigzag pattern: rise to 1.5, drop to 0.5, return to 1
-    #     rise1_steps = steps // 5
-    #     drop1_steps = steps // 5
-    #     rise2_steps = steps // 5
-    #     drop2_steps = steps // 5
-    #     return_steps = steps - (rise1_steps + rise2_steps + drop1_steps + drop2_steps)
-    
-    #     # Create the rise sequence from 1 to 1.5
-    #     rise1_sequence = np.linspace(1, high1, rise1_steps)
-    
-    #     # Create the drop sequence from 1.5 to 0.5
-    #     drop1_sequence = np.linspace(high1, low1, drop1_steps)
-    
-    #     # Create the return sequence from 0.5 to 1
-    #     rise2_sequence = np.linspace(low1, high2, rise2_steps)
-        
-    #     # Create the return sequence from 0.5 to 1
-    #     drop2_sequence = np.linspace(high2, low2, drop2_steps)
-        
-    #     # Create the return sequence from 0.5 to 1
-    #     return_sequence = np.linspace(low2, 1, return_steps)
-        
-    #     # Concatenate the sequences to form the full zigzag pattern
-    #     return np.concatenate((rise1_sequence, drop1_sequence,
-    #                             rise2_sequence, drop2_sequence,
-    #                             return_sequence))
 
     def get_bid_price(self, token):
         if token == "A":
@@ -139,8 +65,8 @@ class GBMPriceSimulator:
         if self.deterministic:
             
             # Use a predetermined shock from the list
-            self.AP = self.initial_price * self.pathA[self.shock_index%50] 
-            self.BP = self.initial_price * self.pathB[self.shock_index%50]
+            self.AP = self.initial_price * self.pathA[self.shock_index%self.steps] 
+            self.BP = self.initial_price * self.pathB[self.shock_index%self.steps]
             self.shock_index += 1
         else:
             # Stochastic update, random shock
@@ -164,12 +90,33 @@ class GBMPriceSimulator:
         self.shock_index = 0  # Reset shock index
 
 
-# if __name__ == '__main__':
-#     # Set the seed for reproducibility
-#     np.random.seed(123)
+if __name__ == '__main__':
+    # Set the seed for reproducibility
+    np.random.seed(123)
 
+    market_simulator = MarketSimulator(start_price=1, deterministic=True)
+    ask_price = []
+    bid_price = []
+    for i in range(500):
+        ask_a = market_simulator.get_ask_price('A')
+        ask_b = market_simulator.get_ask_price('B')
+        bid_a = market_simulator.get_bid_price('A')
+        bid_b = market_simulator.get_bid_price('B')
+        ask_price.append(ask_a / bid_b)
+        bid_price.append(bid_a / ask_b)
+        market_simulator.next()
+        
+    plt.figure(figsize=(20, 10))
+    plt.plot(np.arange(500), ask_price, label='Market_ask_price')
+    plt.plot(np.arange(500), bid_price, label='Market_bid_price')
+    plt.title("market price simulation from GBM with 500 steps")
+    plt.xlabel("steps")
+    plt.ylabel("price ratio: (USD/A) / (USD/B)")
+    plt.grid(True)
+    plt.legend()
+    plt.savefig('market_simulation_500_steps.png')
     
-#     market_simulator = GBMPriceSimulator(start_price=100, deterministic=True, random=True)
+        
 
 #     askA = []
 #     askB = []
