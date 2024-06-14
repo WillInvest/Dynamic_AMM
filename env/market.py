@@ -4,7 +4,17 @@ import matplotlib.pyplot as plt
 
 
 class MarketSimulator:
-    def __init__(self, start_price=100, mu=0.1, sigma=0.5, epsilon=0.01, dt=0.01, deterministic=False, random=False, steps=500):
+    def __init__(self,
+                 start_price=100,
+                 mu=0.1,
+                 sigma=0.5,
+                 epsilon=0.01,
+                 dt=0.01,
+                 deterministic=False,
+                 steps=500,
+                 seed=None):
+        if seed is not None:
+            np.random.seed(seed)
         self.initial_price = start_price
         self.initial_mu = mu
         self.initial_sigma = sigma
@@ -72,12 +82,12 @@ class MarketSimulator:
             # Stochastic update, random shock
             shock1 = np.random.normal()
             shock2 = np.random.normal()
+
             # Update the current price using the GBM formula
             self.AP *= np.exp(
                 (self.mu - 0.5 * self.sigmaA ** 2) * self.dt + self.sigmaA * np.sqrt(self.dt) * shock1)
             self.BP *= np.exp(
                 (self.mu - 0.5 * self.sigmaB ** 2) * self.dt + self.sigmaB * np.sqrt(self.dt) * shock2)
-
         
 
     def reset(self):
@@ -92,7 +102,7 @@ class MarketSimulator:
 
 if __name__ == '__main__':
     # Set the seed for reproducibility
-    np.random.seed(123)
+    # np.random.seed(123)
 
     market_simulator = MarketSimulator(start_price=1, deterministic=True)
     ask_price = []
@@ -117,48 +127,3 @@ if __name__ == '__main__':
     plt.savefig('market_simulation_500_steps.png')
     
         
-
-#     askA = []
-#     askB = []
-#     bidA = []
-#     bidB = []
-#     ask_ratio = []
-#     bid_ratio = []
-#     for _ in range(50):
-#         market_simulator.next()
-#         askA.append(market_simulator.get_ask_price('A'))
-#         askB.append(market_simulator.get_ask_price('B'))
-#         bidA.append(market_simulator.get_bid_price('A'))
-#         bidB.append(market_simulator.get_bid_price('B'))
-#         ask_ratio.append(market_simulator.get_ask_price('A') / market_simulator.get_bid_price('B'))
-#         bid_ratio.append(market_simulator.get_bid_price('A') / market_simulator.get_ask_price('B'))
-
-
-
-#     # Plotting the prices
-#     plt.figure(figsize=(10, 10))
-#     # First subplot: Bid and Ask Prices for Tokens A and B
-#     plt.subplot(2, 1, 1)  # 2 rows, 1 column, 1st subplot
-#     plt.plot(bidA, label='Market Bid for A')
-#     plt.plot(askA, label='Market Ask for A')
-#     plt.plot(bidB, label='Market Bid for B')
-#     plt.plot(askB, label='Market Ask for B')
-#     plt.title('Bid and Ask Prices for Tokens A and B')
-#     plt.xlabel('Step')
-#     plt.ylabel('Price')
-#     plt.legend()
-#     plt.grid(True)
-
-#     # Second subplot: Bid and Ask Ratios
-#     plt.subplot(2, 1, 2)  # 2 rows, 1 column, 2nd subplot
-#     plt.plot(bid_ratio, label='Bid Ratio')
-#     plt.plot(ask_ratio, label='Ask Ratio')
-#     plt.title('Bid and Ask Ratios')
-#     plt.xlabel('Step')
-#     plt.ylabel('Ratio')
-#     plt.legend()
-#     plt.grid(True)
-
-#     # Display the plots
-#     plt.tight_layout()
-#     plt.show()

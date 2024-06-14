@@ -118,11 +118,8 @@ if __name__ == "__main__":
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.shape[0]
     cumulative_reward = 0
-    actions = np.random.rand(100) * 0.2 - 0.1
-    print(f"actions: {actions}")
+    actions = 0.1
+    print(f"pre:\n{amm}")
+    amm.swap(0.1)
+    print(f"post:\n{amm}")
 
-    for action in actions:
-        new_state, rew, done, truncated, info = env.step(action)
-        cumulative_reward += rew
-        print(f"cumulative_fee: {env.cumulative_fee} | type: {env.cumulative_fee.dtype}")
-        

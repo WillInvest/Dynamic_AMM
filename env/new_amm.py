@@ -77,16 +77,20 @@ class AMM:
     
 if __name__ == '__main__':
     
-    amount = np.random.rand(10000) * 0.2 - 0.1
-    print(amount)
     initial_a = 10000
-    initial_b = 9000
+    initial_b = 10000
     amm = AMM(initial_a, initial_b, fee=0.2)
+    amm.swap(0.1)
     print(amm)
-    amm.swap(-0.1)
+    amm.reset()
     print(amm)
-    amm.swap(0.8)
+    amm.fee += 0.2
+    amm.swap(0.1)
     print(amm)
+    amm = AMM(initial_a, initial_b, fee=0.4)
+    amm.swap(0.1)
+    print(amm)
+
     
     
     
