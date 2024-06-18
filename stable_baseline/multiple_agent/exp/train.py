@@ -14,6 +14,7 @@ os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 sys.path.append('../../..')
 
 from env.multiAmm import MultiAgentAmm
+from env.amm_env import ArbitrageEnv
 from env.market import MarketSimulator
 from env.new_amm import AMM
 
@@ -46,18 +47,30 @@ def print_results(results=None, init=True):
               "\n| `stdR`: Std value of cumulative rewards, which is the std of rewards in an episode."
               "\n| `bestR`: Best reward in all episodes."
               "\n| `bestR_step`: Totals steps that generate the best reward."
-              f"\n| {'step':>15} | {'avgR':>15} | {'stdR':>15} | {'bestR':>15} | {'bestR_step':>15}")
+              "\n| `mean_total_reward`: Mean total reward in all episodes."
+              "\n| `mean_swap_rate`: Mean swap rate in all episodes."
+              "\n| `mean_tip_rate`: Mean tip rate in all episodes."
+              "\n| `mean_total_gas`: Mean total gas in all episodes."
+
+              f"\n| {'step':>15} | {'avgR':>15} | {'stdR':>15} | "
+              f"{'bestR':>15} | {'bestR_step':>15} | "
+              f"{'mean_total_reward':>18} | {'mean_swap_rate':>15} | "
+              f"{'mean_tip_rate':>15} | {'mean_total_gas':>15}")
     else:
         print(f"| {results['total_steps']:15.2e} | "
               f"{results['average_reward']:15.2f} | "
               f"{results['std_reward']:15.2f} | "
               f"{results['best_reward']:15.2f} | "
-              f"{results['best_reward_step']:15.2f}")
+              f"{results['best_reward_step']:15.2f} | "
+              f"{results['mean_total_rewards']:18.2f} | "
+              f"{results['mean_swap_rate']:15.6f} | "
+              f"{results['mean_tip_rate']:15.6f} | "
+              f"{results['mean_total_gas']:15.6f}")
 
 def train(fee_rates, sigmas):
     
     TOTAL_STEPS = 1e6
-    EVALUATE_PER_STEP = 1e3
+    EVALUATE_PER_STEP = 1e4
     MODEL = 'TD3'
     LEARNING_RATE = 0.001
     SEED_LEN = 5
@@ -69,6 +82,7 @@ def train(fee_rates, sigmas):
         for fee_rate in fee_rates:
             for sigma in sigmas:
                 for ex in range(1, exchange_steps):
+                    rule_based = True if ex == 1 else False
                     fee_rate = round(fee_rate, 2)
                     sigma = round(sigma, 2)
                     config = {
@@ -82,7 +96,7 @@ def train(fee_rates, sigmas):
                             config=config,
                             name=f"{MODEL}{agent_seed}-f{fee_rate}-s{sigma}-exstep{ex}")
 
-                    ROOT_DIR = '/home/shiftpub/AMM-Python/stable_baseline'
+                    ROOT_DIR = '/Users/haofu/AMM-Python/stable_baseline'
                     model_dirs = os.path.join(ROOT_DIR,
                                             "models",
                                             MODEL,
@@ -98,9 +112,13 @@ def train(fee_rates, sigmas):
                         
                     # Create vectorized environment
                     model_name = os.path.join(model_dirs, f"{MODEL}_best_model")
+                    if not os.path.exists(model_name):
+                        model = TD3(policy='MlpPolicy', env=ArbitrageEnv(market=MarketSimulator(sigma=sigma), amm=AMM(fee=fee_rate)), learning_rate=LEARNING_RATE)
+                        model.save(model_name)
                     envs = [lambda: Monitor(MultiAgentAmm(market=MarketSimulator(sigma=sigma),
                                                         amm=AMM(fee=fee_rate),
-                                                        model_path=model_name), filename=None) for _ in range(10)]
+                                                        model_path=model_name,
+                                                        rule_based=rule_based), filename=None) for _ in range(10)]
                     env = SubprocVecEnv(envs)
                     n_actions = env.action_space.shape[-1]
                     action_noise = NormalActionNoise(mean=np.zeros(n_actions), sigma=0.1 * np.ones(n_actions))
@@ -130,7 +148,8 @@ def train(fee_rates, sigmas):
                         model.learn(total_timesteps=int(EVALUATE_PER_STEP), progress_bar=False, reset_num_timesteps=False)
                         total_steps_trained += int(EVALUATE_PER_STEP)
                         eval_episodes = 10
-                        mean_reward, std_reward, mean_total_rewards = evaluate_policy(model, env, n_eval_episodes=eval_episodes, deterministic=True)
+                        mean_reward, std_reward, mean_tot_rew, mean_swap_rate, mean_tip_rate, mean_total_gas = evaluate_policy(
+                            model, env, n_eval_episodes=eval_episodes, deterministic=True)
                         
                         if mean_reward >= best_avg_reward:
                             best_avg_reward = mean_reward
@@ -143,7 +162,11 @@ def train(fee_rates, sigmas):
                             "std_reward": std_reward,
                             "best_avg_rew": best_avg_reward,
                             "best_rew_steps": best_reward_steps,
-                            "total_steps_trained": total_steps_trained
+                            "total_steps_trained": total_steps_trained,
+                            "mean_total_rewards": mean_tot_rew,
+                            "mean_swap_rate": mean_swap_rate,
+                            "mean_tip_rate": mean_tip_rate,
+                            "mean_total_gas": mean_total_gas
                             })
 
                         results = {
@@ -151,7 +174,11 @@ def train(fee_rates, sigmas):
                             "average_reward": mean_reward,
                             "std_reward": std_reward,
                             "best_reward": best_avg_reward,
-                            "best_reward_step": best_reward_steps
+                            "best_reward_step": best_reward_steps,
+                            "mean_total_rewards": mean_tot_rew,
+                            "mean_swap_rate": mean_swap_rate,
+                            "mean_tip_rate": mean_tip_rate,
+                            "mean_total_gas": mean_total_gas
                         }
                         print_results(results=results, init=False)
                         
