@@ -31,28 +31,32 @@ class MultiAgentAmm(Env):
         self.cumulative_fee = 0
         self.total_rewards = 0
         self.total_gas = 0
+        self.model_path = model_path
         # observation space = [market price, amm price, gas price]
-        self.observation_space = spaces.Box(low=np.array([0., 0., 0.], dtype=np.float32),
-                                            high=np.array([np.inf, np.inf, np.inf], dtype=np.float32))
+        self.observation_space = spaces.Box(low=np.array([0., 0., 0], dtype=np.float32),
+                                            high=np.array([np.inf, np.inf, 1], dtype=np.float32))
         # action space = [swap percentage, gas fee]
-        self.action_space = spaces.Box(low=np.array([-1., 0.]),
+        self.action_space = spaces.Box(low=np.array([-1., -1.]),
                                        high=np.array([1., 1.]), dtype=np.float32)
         self.done = False
         self.rule_based = rule_based
-        
-        self.agent1 = TD3.load(model_path)
-        print(f"agent loaded from {model_path}")
+        if not rule_based:
+            self.agent1 = TD3.load(self.model_path)
+            print(f"agent loaded from {self.model_path}")
 
     def step(self, actions1: np.array) -> Tuple[np.array, float, float, bool, dict]:  
         # actions1, actions2 = actions1
         # Scale action to avoid depletion too quickly
+        obs = self.get_obs()
         if self.rule_based:
-            actions2 = self.action_space.sample()
+            swap_rate2 = (obs[0] - obs[1]) / obs[1]
+            tip_rate2 = 0.0001
         else:
             actions2, _state = self.agent1.predict(obs) 
-        swap_rate1, swap_rate2 = actions1[0] * 0.2, actions2[0] * 0.2
-        tip_rate1, tip_rate2 = actions1[1] * 1e-4, actions2[1] * 1e-4
-        obs = self.get_obs()
+            print(f"fix_model_action: {actions2}")
+            swap_rate2, tip_rate2 = actions2[0] * 0.2, actions2[1] * 1e-4
+            
+        swap_rate1, tip_rate1 = actions1[0] * 0.2, actions1[1] * 1e-4
         
         def execute_trade(swap_rate, tip_rate, asset_in, asset_out):
             info = self.amm.swap(swap_rate)
@@ -112,12 +116,20 @@ class MultiAgentAmm(Env):
         
         if self.market.shock_index == self.market.steps:
             self.done = True
+        
+        # panalize negative reward and give more weights to the current agent
+        modified_rew1 = 2 * rew1 if rew1<0 else rew1
+        modified_rew2 = 2 * rew2 if rew2<0 else rew2
+        total_rewards = 2 * modified_rew1 + modified_rew2
 
         # Advance market and gas price to the next state
         self.market.next()
         next_obs = self.get_obs()
 
-        return next_obs, rew1, self.done, False, {'total_rewards': (rew1 + rew2), 'total_gas': (gas1 + gas2)}
+        return next_obs, rew1, self.done, False, {'total_rewards': (total_rewards),
+                                                           'reward1': rew1,
+                                                           'reward2': rew2,
+                                                           'total_gas': (gas1 + gas2)}
 
     
     def reset(self, seed=None, options=None):
@@ -142,7 +154,7 @@ class MultiAgentAmm(Env):
  
 if __name__ == "__main__":
     model_path = '/Users/haofu/AMM-Python/stable_baseline/models/TD3/agent_seed_0/fee_0.01/sigma_0.2/TD3_best_model.zip'
-    market = MarketSimulator(start_price=1, deterministic=False)
+    market = MarketSimulator(start_price=1, deterministic=True)
     amm = AMM(initial_a=8000, initial_b=10000, fee=0.02)  # Set your fee rate
     env = MultiAgentAmm(market, amm, model_path=model_path, rule_based=True)
     

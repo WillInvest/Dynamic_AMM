@@ -4,6 +4,8 @@ import time
 import wandb
 import numpy as np
 import warnings
+from collections import deque
+import random
 
 # Suppress all warnings
 warnings.filterwarnings('ignore')
@@ -26,6 +28,7 @@ from stable_baselines3.common.vec_env import SubprocVecEnv
 from stable_baselines3.common.noise import NormalActionNoise
 from stable_baselines3.common.monitor import Monitor
 from wandb.integration.sb3 import WandbCallback
+
 
 def create_model(model_type, env, learning_rate, buffer_size, batch_size, tau, gamma, action_noise):
     """Create the model with specified hyperparameters."""
@@ -54,7 +57,7 @@ def print_results(results=None, init=True):
 
               f"\n| {'step':>15} | {'avgR':>15} | {'stdR':>15} | "
               f"{'bestR':>15} | {'bestR_step':>15} | "
-              f"{'mean_total_reward':>18} | {'mean_swap_rate':>15} | "
+              f"{'mean_total_reward':>18} | {'mean_reward1':>18} | {'mean_reward2':>18} | {'mean_swap_rate':>15} | "
               f"{'mean_tip_rate':>15} | {'mean_total_gas':>15}")
     else:
         print(f"| {results['total_steps']:15.2e} | "
@@ -63,21 +66,31 @@ def print_results(results=None, init=True):
               f"{results['best_reward']:15.2f} | "
               f"{results['best_reward_step']:15.2f} | "
               f"{results['mean_total_rewards']:18.2f} | "
+              f"{results['mean_reward1']:15.6f} | "
+              f"{results['mean_reward2']:15.6f} | "
               f"{results['mean_swap_rate']:15.6f} | "
               f"{results['mean_tip_rate']:15.6f} | "
               f"{results['mean_total_gas']:15.6f}")
 
+
+# Function to save a model to the queue
+def save_model_to_queue(model, model_path, best_model_queue):
+    model.save(model_path)
+    best_model_queue.append(model_path)
+
 def train(fee_rates, sigmas):
     
     TOTAL_STEPS = 1e6
-    EVALUATE_PER_STEP = 1e4
+    EVALUATE_PER_STEP = 1e3
     MODEL = 'TD3'
     LEARNING_RATE = 0.001
     SEED_LEN = 5
     eval_deterministic = False
     eval_steps = 500
-    exchange_steps = 10
-    
+    exchange_steps = 30
+    # Initialize the deque with a fixed size
+    best_model_queue = deque(maxlen=5)
+
     for agent_seed in range(SEED_LEN):
         for fee_rate in fee_rates:
             for sigma in sigmas:
@@ -99,10 +112,7 @@ def train(fee_rates, sigmas):
                     ROOT_DIR = '/Users/haofu/AMM-Python/stable_baseline'
                     model_dirs = os.path.join(ROOT_DIR,
                                             "models",
-                                            MODEL,
-                                            f'agent_seed_{agent_seed}',
-                                            f'fee_{fee_rate:.2f}',
-                                            f'sigma_{sigma:.1f}')
+                                            f'r{fee_rate:.2f}_s{sigma:.1f}'.format(fee_rate, sigma),)
                     
                     logdir = os.path.join(ROOT_DIR, "logs", "tensorboard")
                     if not os.path.exists(model_dirs):
@@ -111,26 +121,26 @@ def train(fee_rates, sigmas):
                         os.makedirs(logdir)
                         
                     # Create vectorized environment
-                    model_name = os.path.join(model_dirs, f"{MODEL}_best_model")
-                    if not os.path.exists(model_name):
-                        model = TD3(policy='MlpPolicy', env=ArbitrageEnv(market=MarketSimulator(sigma=sigma), amm=AMM(fee=fee_rate)), learning_rate=LEARNING_RATE)
-                        model.save(model_name)
+                    # random selected model from deque
+                    if best_model_queue:
+                        fix_model = random.choice(best_model_queue)
+                    else:
+                        fix_model = None
+
                     envs = [lambda: Monitor(MultiAgentAmm(market=MarketSimulator(sigma=sigma),
                                                         amm=AMM(fee=fee_rate),
-                                                        model_path=model_name,
+                                                        model_path=fix_model,
                                                         rule_based=rule_based), filename=None) for _ in range(10)]
                     env = SubprocVecEnv(envs)
                     n_actions = env.action_space.shape[-1]
                     action_noise = NormalActionNoise(mean=np.zeros(n_actions), sigma=0.1 * np.ones(n_actions))
                     
                     # Create the model with specified hyperparameters
-                    model = TD3(policy='MlpPolicy',
-                                env=env,
-                                learning_rate=LEARNING_RATE,
-                                buffer_size=int(1e6),
-                                gamma=0.95,
-                                action_noise=action_noise,
-                                seed=int(agent_seed))
+                    if best_model_queue:
+                        learning_model = random.choice(best_model_queue) # Randomly select a model from the queue
+                        model = TD3.load(learning_model, env=env, learning_rate=LEARNING_RATE, action_noise=action_noise)
+                    else:
+                        model = TD3("MlpPolicy", env=env, learning_rate=LEARNING_RATE, action_noise=action_noise, gamma=0.95)
                     
                     # Set up the logger
                     unique_logdir = os.path.join(logdir, f"run_{int(time.time())}")
@@ -142,19 +152,22 @@ def train(fee_rates, sigmas):
                     total_steps_trained = 0
                     best_reward_steps = 0
                     print_results(results=None, init=True)
-
+                    model_name = os.path.join(model_dirs, f"{MODEL}_best_model_r_{fee_rate}_s_{sigma}_ex_{ex}")
                     # Training loop with evaluation
                     for _ in range(int(TOTAL_STEPS // EVALUATE_PER_STEP)):  # Adjust the range based on your needs
                         model.learn(total_timesteps=int(EVALUATE_PER_STEP), progress_bar=False, reset_num_timesteps=False)
                         total_steps_trained += int(EVALUATE_PER_STEP)
                         eval_episodes = 10
-                        mean_reward, std_reward, mean_tot_rew, mean_swap_rate, mean_tip_rate, mean_total_gas = evaluate_policy(
+                        mean_reward, std_reward, mean_tot_rew, mean_rew1, mean_rew2, mean_swap_rate, mean_tip_rate, mean_total_gas = evaluate_policy(
                             model, env, n_eval_episodes=eval_episodes, deterministic=True)
-                        
+
                         if mean_reward >= best_avg_reward:
                             best_avg_reward = mean_reward
                             best_reward_steps = total_steps_trained
+                            # save model, and update the best model queue
                             model.save(model_name)
+                            best_model_queue.append(model_name)
+
                             
                         # Log wandb
                         wandb.log({
@@ -164,6 +177,8 @@ def train(fee_rates, sigmas):
                             "best_rew_steps": best_reward_steps,
                             "total_steps_trained": total_steps_trained,
                             "mean_total_rewards": mean_tot_rew,
+                            "mean_reward1": mean_rew1,
+                            "mean_reward2": mean_rew2,
                             "mean_swap_rate": mean_swap_rate,
                             "mean_tip_rate": mean_tip_rate,
                             "mean_total_gas": mean_total_gas
@@ -176,6 +191,8 @@ def train(fee_rates, sigmas):
                             "best_reward": best_avg_reward,
                             "best_reward_step": best_reward_steps,
                             "mean_total_rewards": mean_tot_rew,
+                            "mean_reward1": mean_rew1,
+                            "mean_reward2": mean_rew2,
                             "mean_swap_rate": mean_swap_rate,
                             "mean_tip_rate": mean_tip_rate,
                             "mean_total_gas": mean_total_gas
@@ -188,6 +205,6 @@ def train(fee_rates, sigmas):
 if __name__ == "__main__":
     
     rates = np.arange(0.01, 0.21, 0.01)
-    sigmas = np.arange(0.2, 1.2, 0.2)
+    sigmas = np.arange(0.2, 1.0, 0.2)
     train(fee_rates=rates, sigmas=sigmas)
 
