@@ -204,7 +204,7 @@ def train(fee_rates, sigmas):
 
 if __name__ == "__main__":
     
-    rates = np.arange(0.01, 0.21, 0.01)
+    rates = np.arange(0.05, 0.21, 0.01)
     sigmas = np.arange(0.2, 1.0, 0.2)
     train(fee_rates=rates, sigmas=sigmas)
 

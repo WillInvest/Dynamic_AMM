@@ -41,3 +41,11 @@ wandb/
 /api_key
 /src/data/crypto_data/
 /src/data/.DS_Store
+
+*.zip
+*.png
+.history/
+past_result/
+
+models/
+figs/

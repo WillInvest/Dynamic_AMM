@@ -169,15 +169,17 @@ class MultiAgentAmm(Env):
             self.done = True
         
         # panalize negative reward and give more weights to the current agent
-        modified_rew1 = 2 * rew1 if rew1<0 else rew1
-        modified_rew2 = 2 * rew2 if rew2<0 else rew2
-        total_rewards = 2 * modified_rew1 + modified_rew2
+        # modified_rew1 = 2 * rew1 if rew1<0 else rew1
+        # modified_rew2 = 2 * rew2 if rew2<0 else rew2
+        # total_rewards = 2 * modified_rew1 + modified_rew2
+        self.total_rewards += rew1 + rew2
+        self.total_gas += gas_fee1 + gas_fee2
 
         # Advance market and gas price to the next state
         self.market.next()
         next_obs = self.get_obs()
 
-        return next_obs, rew1, self.done, False, {'total_rewards': (total_rewards),
+        return next_obs, rew1, self.done, False, {'total_rewards': (self.total_rewards),
                                                            'reward1': rew1,
                                                            'reward2': rew2,
                                                            'total_gas': (gas_fee1 + gas_fee2)}
