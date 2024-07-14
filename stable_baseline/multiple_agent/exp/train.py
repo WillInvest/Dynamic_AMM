@@ -13,7 +13,7 @@ warnings.filterwarnings('ignore')
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
-# sys.path.append('../../..')
+sys.path.append('../../..')
 print(f"current working directory: {os.getcwd()}")
 print(f"sys path: {sys.path}")
 
@@ -48,30 +48,30 @@ def print_results(results=None, init=True):
     if init:
         print("\n| `total steps`: Number of samples, or total training steps, or running times of `env.step()`."
               "\n| `avgR`: Average value of cumulative rewards, which is the sum of rewards in an episode."
-              "\n| `stdR`: Std value of cumulative rewards, which is the std of rewards in an episode."
-              "\n| `bestR`: Best reward in all episodes."
-              "\n| `bestR_step`: Totals steps that generate the best reward."
-              "\n| `mean_total_reward`: Mean total reward in all episodes."
-              "\n| `mean_swap_rate`: Mean swap rate in all episodes."
-              "\n| `mean_tip_rate`: Mean tip rate in all episodes."
-              "\n| `mean_total_gas`: Mean total gas in all episodes."
+              "\n| `stdR`: Std value of cumulative rewards, which is the std of rewards in an episode.")
+            #   "\n| `bestR`: Best reward in all episodes."
+            #   "\n| `bestR_step`: Totals steps that generate the best reward."
+            #   "\n| `mean_total_reward`: Mean total reward in all episodes."
+            #   "\n| `mean_swap_rate`: Mean swap rate in all episodes."
+            #   "\n| `mean_tip_rate`: Mean tip rate in all episodes."
+            #   "\n| `mean_total_gas`: Mean total gas in all episodes."
 
-              f"\n| {'step':>15}  " # | {'avgR':>15} | {'stdR':>15} |
-              f"{'bestR':>15} | {'bestR_step':>15} | "
-              f"{'mean_total_reward':>18} | {'mean_reward1':>18} | {'mean_reward2':>18} | {'mean_swap_rate':>15} | "
-              f"{'mean_tip_rate':>15} | {'mean_total_gas':>15}")
+            #   f"\n| {'step':>15}  " # | {'avgR':>15} | {'stdR':>15} |
+            #   f"{'bestR':>15} | {'bestR_step':>15} | ")
+            #   f"{'mean_total_reward':>18} | {'mean_reward1':>18} | {'mean_reward2':>18} | {'mean_swap_rate':>15} | "
+            #   f"{'mean_tip_rate':>15} | {'mean_total_gas':>15}")
     else:
         print(f"| {results['total_steps']:15.2e} | "
-            #   f"{results['average_reward']:15.2f} | "
-            #   f"{results['std_reward']:15.2f} | "
-              f"{results['best_reward']:15.2f} | "
-              f"{results['best_reward_step']:15.2f} | "
-              f"{results['mean_total_rewards']:18.2f} | "
-              f"{results['mean_reward1']:15.6f} | "
-              f"{results['mean_reward2']:15.6f} | "
-              f"{results['mean_swap_rate']:15.6f} | "
-              f"{results['mean_tip_rate']:15.6f} | "
-              f"{results['mean_total_gas']:15.6f}")
+              f"{results['average_reward']:15.2f} | "
+              f"{results['std_reward']:15.2f} | ")
+            #   f"{results['best_reward']:15.2f} | "
+            #   f"{results['best_reward_step']:15.2f} | "
+            #   f"{results['mean_total_rewards']:18.2f} | "
+            #   f"{results['mean_reward1']:15.6f} | "
+            #   f"{results['mean_reward2']:15.6f} | "
+            #   f"{results['mean_swap_rate']:15.6f} | "
+            #   f"{results['mean_tip_rate']:15.6f} | "
+            #   f"{results['mean_total_gas']:15.6f}")
 
 
 # Function to save a model to the queue
@@ -81,8 +81,8 @@ def save_model_to_queue(model, model_path, best_model_queue):
 
 def train(fee_rates, sigmas):
     
-    TOTAL_STEPS = 5e6
-    EVALUATE_PER_STEP = 1e3
+    TOTAL_STEPS = 1e6
+    EVALUATE_PER_STEP = 1e4
     MODEL = 'TD3'
     LEARNING_RATE = 0.0001
     SEED_LEN = 5
@@ -95,8 +95,8 @@ def train(fee_rates, sigmas):
     for risk_aversion in [0.2, 0.4, 0.6, 0.8, 1.0]:
         for fee_rate in fee_rates:
             for sigma in sigmas:
-                    fee_rate = round(fee_rate, 2)
-                    sigma = round(sigma, 1)
+                    # fee_rate = round(fee_rate, 2)
+                    sigma = round(sigma, 2)
                     config = {
                         "fee_rate": fee_rate,
                         "sigma": sigma,
@@ -104,14 +104,14 @@ def train(fee_rates, sigmas):
                         "eval_deterministic": eval_deterministic,
                         "eval_steps": eval_steps
                     }
-                    wandb.init(project=f'AMM_Multi_Agent_rule_based_risk_aversion_{risk_aversion}',
+                    wandb.init(project=f'AMM_DUO_Agent',
                             config=config,
-                            name=f"f{fee_rate}-s{sigma}-rule-based")
+                            name=f"ra{risk_aversion}-f{fee_rate}-s{sigma}")
 
                     ROOT_DIR = '/home/shiftpub/AMM-Python/stable_baseline/multiple_agent'
                     model_dirs = os.path.join(ROOT_DIR,
-                                            "models",
-                                            f'r{fee_rate:.2f}_s{sigma:.1f}'.format(fee_rate, sigma),)
+                                            "models", f"risk_aversion_{risk_aversion}",
+                                            f'r{fee_rate:.4f}_s{sigma:.2f}'.format(fee_rate, sigma),)
                     
                     logdir = os.path.join(ROOT_DIR, "logs", "tensorboard")
                     if not os.path.exists(model_dirs):
@@ -156,7 +156,7 @@ def train(fee_rates, sigmas):
                         model.learn(total_timesteps=int(EVALUATE_PER_STEP), progress_bar=False, reset_num_timesteps=False)
                         total_steps_trained += int(EVALUATE_PER_STEP)
                         eval_episodes = 10
-                        mean_reward, std_reward, mean_tot_rew, mean_rew1, mean_rew2, mean_swap_rate, mean_tip_rate, mean_total_gas = evaluate_policy(
+                        mean_reward, std_reward = evaluate_policy(
                             model, env, n_eval_episodes=eval_episodes, deterministic=True)
                         model_name_best = os.path.join(model_dirs, f"{MODEL}_best_model_r_{fee_rate:.2f}_s_{sigma:.1f}_rule_based".format(fee_rate, sigma))
                         model_name_step = os.path.join(model_dirs, f"{MODEL}_step_model_r_{fee_rate:.2f}_s_{sigma:.1f}_rule_based_steps{total_steps_trained:.0f}".format(fee_rate, sigma, total_steps_trained))
@@ -172,30 +172,13 @@ def train(fee_rates, sigmas):
                         # Log wandb
                         wandb.log({
                             "mean_reward": mean_reward,
-                            "std_reward": std_reward,
-                            "best_avg_rew": best_avg_reward,
-                            "best_rew_steps": best_reward_steps,
-                            "total_steps_trained": total_steps_trained,
-                            "mean_total_rewards": mean_tot_rew,
-                            "mean_reward1": mean_rew1,
-                            "mean_reward2": mean_rew2,
-                            "mean_swap_rate": mean_swap_rate,
-                            "mean_tip_rate": mean_tip_rate,
-                            "mean_total_gas": mean_total_gas
+                            "std_reward": std_reward
                             })
 
                         results = {
                             "total_steps": total_steps_trained,
-                            # "average_reward": mean_reward,
-                            # "std_reward": std_reward,
-                            "best_reward": best_avg_reward,
-                            "best_reward_step": best_reward_steps,
-                            "mean_total_rewards": mean_tot_rew,
-                            "mean_reward1": mean_rew1,
-                            "mean_reward2": mean_rew2,
-                            "mean_swap_rate": mean_swap_rate,
-                            "mean_tip_rate": mean_tip_rate,
-                            "mean_total_gas": mean_total_gas
+                            "average_reward": mean_reward,
+                            "std_reward": std_reward
                         }
                         print_results(results=results, init=False)
                         
@@ -204,7 +187,9 @@ def train(fee_rates, sigmas):
 
 if __name__ == "__main__":
     
-    rates = np.arange(0.05, 0.21, 0.01)
-    sigmas = np.arange(0.2, 1.0, 0.2)
+    rates = [0.0005, 0.001, 0.003]
+    sigmas = np.arange(0.01, 0.11, 0.01)
+    sigmas = np.concatenate((sigmas, np.arange(0.2, 1.1, 0.1)))
+
     train(fee_rates=rates, sigmas=sigmas)
 
