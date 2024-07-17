@@ -44,16 +44,15 @@ def calculate_fee(model, env):
     
     return cumulative_fee, cumulative_reward, total_rewards, total_gas
 
-def generate_fee_csv(root_path, n_agent, fee_rates, sigmas, iterations):
+def generate_fee_csv(root_path, fee_rates, sigmas, iterations):
     
-    for agent_seed in range(n_agent):
+    for risk_aversion in [0.2, 0.4, 0.6]:
         for fee_rate in fee_rates:
             for sigma in sigmas:
                 data = []
-                agent_seed = int(agent_seed)
-                fee_rate = round(fee_rate, 2)
-                sigma = round(sigma, 1)
-                model_dir = os.path.join(root_path, f"r{fee_rate:.2f}_s{sigma:.1f}")
+                model_dir = os.path.join(root_path, 
+                                         f'risk_aversion_{risk_aversion}',
+                                         f"r{fee_rate}_s{sigma}")
                 model_names = [f for f in os.listdir(model_dir) if f.startswith('TD3_step')]
                 # Get the highest steps model
                 best_model = get_highest_steps_model(model_names)
@@ -61,33 +60,32 @@ def generate_fee_csv(root_path, n_agent, fee_rates, sigmas, iterations):
 
                 # load model
                 model = TD3.load(path=model_path)
-                for r in np.arange(0.01, 0.08, 0.01):
-                    for s in np.arange(0.2, 1.0, 0.2):
-                        r = round(r, 2)
-                        s = round(s, 1)
+                for ra in [0.2, 0.4, 0.6, 0.8, 1.0]:
+                    for r in fee_rates:
+                        for s in sigmas:
+                            # Setup environment and agent
+                            market = MarketSimulator(start_price=1, deterministic=False, steps=500, sigma=s)
+                            amm = AMM(initial_a=10000, initial_b=10000, fee=r)  # Set your fee rate
+                            env = MultiAgentAmm(market, amm, risk_aversion=ra)
+                            print(f"Calculating fee for risk aversion ({ra}), fee rate ({r}), sigma ({s})")
 
-                        # Setup environment and agent
-                        market = MarketSimulator(start_price=1, deterministic=False, steps=500, sigma=s)
-                        amm = AMM(initial_a=10000, initial_b=10000, fee=r)  # Set your fee rate
-                        env = MultiAgentAmm(market, amm)
-                        print(f"Calculating fee for rate ({r}), sigma ({s})")
-
-                        for iter in tqdm(range(iterations), desc=f'model_r{fee_rate:.2f}_s{sigma:.1f}'):    
-                            cumulative_fee, cumulative_reward, total_reward, total_gas = calculate_fee(model=model, env=env)
-                            
-                            data.append({
-                                "risk_aversion": 0.2,
-                                "model_fee_rate": fee_rate,
-                                "model_sigma": sigma,
-                                "fee_rate": r,
-                                "sigma": s,
-                                "iterations": iter,
-                                "fee": cumulative_fee,
-                                "reward": cumulative_reward,
-                                "total_reward": total_reward,
-                                "total_gas": total_gas 
-                            })
-        
+                            for iter in tqdm(range(iterations), desc=f'model_ra{risk_aversion}_r{fee_rate}_s{sigma}'):    
+                                cumulative_fee, cumulative_reward, total_reward, total_gas = calculate_fee(model=model, env=env)
+                                
+                                data.append({
+                                    "model_risk_aversion": risk_aversion,
+                                    "model_fee_rate": fee_rate,
+                                    "model_sigma": sigma,
+                                    "risk_aversion": ra,
+                                    "fee_rate": r,
+                                    "sigma": s,
+                                    "iterations": iter,
+                                    "fee": cumulative_fee,
+                                    "reward": cumulative_reward,
+                                    "total_reward": total_reward,
+                                    "total_gas": total_gas 
+                                })
+            
                 data = pd.DataFrame(data)
                 csv_path = os.path.join(root_path, f"csv_file")
 
@@ -95,22 +93,23 @@ def generate_fee_csv(root_path, n_agent, fee_rates, sigmas, iterations):
                     os.makedirs(csv_path)
 
                 # Save the DataFrame to a CSV file
-                csv_name = os.path.join(csv_path, f"fee_rate_{fee_rate}_sigma_{sigma}.csv")
+                csv_name = os.path.join(csv_path, f"risk_aversion_{risk_aversion}_fee_rate_{fee_rate}_sigma_{sigma}.csv")
                 data.to_csv(csv_name)
-                        
+                            
 
 
 if __name__ == "__main__":
     BASE_PATH = '/home/shiftpub/AMM-Python/stable_baseline/multiple_agent/models'
     MODEL_TYPE = 'TD3'
-    FEE_RATES = np.arange(0.01, 0.04, 0.01)
-    SIGMAS = [0.2, 0.4, 0.6, 0.8]
-    N_AGENT = 1
+    FEE_RATES = [0.0001, 0.0005, 0.001, 0.003]
+    SIGMAS = np.array([0.01, 0.02, 0.03, 0.04, 0.05,
+                       0.06, 0.07, 0.08, 0.09, 0.10,
+                       0.2, 0.3, 0.4, 0.5, 0.6, 0.7,
+                       0.8, 0.9, 1.0])
     ITERATIONS = 30
     
     generate_fee_csv(root_path=BASE_PATH,
                          fee_rates=FEE_RATES,
                          sigmas = SIGMAS,
-                         n_agent=N_AGENT,
                          iterations=ITERATIONS)               
                     
