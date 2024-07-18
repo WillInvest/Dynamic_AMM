@@ -1,16 +1,23 @@
 import numpy as np
+import random
 
 class AMM:
-    def __init__(self, initial_a=10000, initial_b=10000, fee=0.06):
+    def __init__(self, initial_a=10000, initial_b=10000, fee=None):
         self.reserve_a = initial_a
         self.reserve_b = initial_b
         self.k = self.reserve_a * self.reserve_b
-        self.fee = fee
+        self.fee = fee if fee is not None else self.get_random_fee()
         self.fee_a = 0
         self.fee_b = 0
         self.initial_a = initial_a
         self.initial_b = initial_b
-
+        
+    def get_random_fee(self):
+        return round(random.uniform(0.0001, 0.3), 4)
+    
+    def next(self):
+        self.fee = self.get_random_fee()
+    
     def get_price(self):
         return self.reserve_b / self.reserve_a
 

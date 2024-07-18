@@ -50,3 +50,8 @@ past_result/
 models/
 figs/
 past_multiple_agent_results
+logs/   
+*.txt
+*.csv
+*.pth
+past_models/

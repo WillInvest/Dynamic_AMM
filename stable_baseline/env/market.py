@@ -24,17 +24,20 @@ class MarketSimulator:
         self.BP = start_price
         self.current_price = start_price
         self.mu = mu
-        self.sigma = sigma
+        self.sigma = sigma if sigma is not None else self.get_random_sigma()
         self.epsilon = epsilon
-        self.sigmaA = sigma
+        self.sigmaA = self.sigma
         self.sigmaB = self.sigmaA/2
         self.dt = dt
         self.deterministic = deterministic  # Flag to control stochastic/deterministic behavior
-        self.shock_index = 0  # Index to track the current shock
+        self.index = 0  # Index to track the current shock
         self.steps = steps
         self.pathA = self.get_zigzag(steps=self.steps, high=1.5, low=0.5)
         self.pathB = self.get_zigzag(steps=self.steps, high=1.2, low=0.8)
-        
+
+    def get_random_sigma(self):
+        return np.random.uniform(0.01, 1.0)
+    
     def get_zigzag(self, steps, high, low):
         
         # Define the basic zigzag pattern: rise to 1.5, drop to 0.5, return to 1
@@ -72,12 +75,17 @@ class MarketSimulator:
             print("Invalid input")
 
     def next(self):
+        
+        self.sigma = self.get_random_sigma()
+        self.sigmaA = self.sigma
+        self.sigmaB = self.sigmaA/2
+        
         if self.deterministic:
             
             # Use a predetermined shock from the list
-            self.AP = self.initial_price * self.pathA[self.shock_index%self.steps] 
-            self.BP = self.initial_price * self.pathB[self.shock_index%self.steps]
-            self.shock_index += 1
+            self.AP = self.initial_price * self.pathA[self.index%self.steps] 
+            self.BP = self.initial_price * self.pathB[self.index%self.steps]
+            self.index += 1
         else:
             # Stochastic update, random shock
             shock1 = np.random.normal()
@@ -97,7 +105,7 @@ class MarketSimulator:
         self.sigma = self.initial_sigma
         self.epsilon = self.initial_epsilon
         self.dt = self.initial_dt
-        self.shock_index = 0  # Reset shock index
+        self.index = 0  # Reset shock index
 
 
 if __name__ == '__main__':

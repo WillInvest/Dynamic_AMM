@@ -46,13 +46,13 @@ def calculate_fee(model, env):
 
 def generate_fee_csv(root_path, fee_rates, sigmas, iterations):
     
-    for risk_aversion in [0.2, 0.4, 0.6]:
-        for fee_rate in fee_rates:
+    for risk_aversion in [0.8]:
+        for fee_rate in [0.001, 0.003]:
             for sigma in sigmas:
                 data = []
                 model_dir = os.path.join(root_path, 
                                          f'risk_aversion_{risk_aversion}',
-                                         f"r{fee_rate}_s{sigma}")
+                                         f"r{fee_rate:.4f}_s{sigma:.2f}")
                 model_names = [f for f in os.listdir(model_dir) if f.startswith('TD3_step')]
                 # Get the highest steps model
                 best_model = get_highest_steps_model(model_names)
@@ -99,7 +99,7 @@ def generate_fee_csv(root_path, fee_rates, sigmas, iterations):
 
 
 if __name__ == "__main__":
-    BASE_PATH = '/home/shiftpub/AMM-Python/stable_baseline/multiple_agent/models'
+    BASE_PATH = '/Users/haofu/AMM-Python/stable_baseline/multiple_agent/models'
     MODEL_TYPE = 'TD3'
     FEE_RATES = [0.0001, 0.0005, 0.001, 0.003]
     SIGMAS = np.array([0.01, 0.02, 0.03, 0.04, 0.05,
