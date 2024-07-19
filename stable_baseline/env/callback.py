@@ -44,7 +44,7 @@ class WandbCallback(BaseCallback):
         # log_data.update(details2_flat)
         # log_data.update(details3_flat)
 
-        self.log_to_csv(log_data)
+        # self.log_to_csv(log_data)
 
         wandb.log({
             "step": self.num_timesteps,

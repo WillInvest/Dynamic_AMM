@@ -42,8 +42,8 @@ class MultiAgentAmm(Env):
         self.observation_space = spaces.Box(low=np.array([0., 0., 0., 0., 0.], dtype=np.float32),
                                             high=np.array([np.inf, np.inf, np.inf, np.inf, np.inf], dtype=np.float32))
         # action space
-        self.action_space = spaces.Box(low=np.array([-1.]),
-                                       high=np.array([1.]), dtype=np.float32)
+        self.action_space = spaces.Box(low=np.array([-1., 0.]),
+                                       high=np.array([1., 1.]), dtype=np.float32)
     
     def get_rule_base_action(self):
         obs = self.get_obs()
@@ -60,11 +60,14 @@ class MultiAgentAmm(Env):
         return swap_rate2
 
     def step(self, action: np.array) -> Tuple[np.array, float, bool, bool, dict]:
+        """
+        urgent level determine whether agent place order or not.
+        market competence determine how much percent of arbitrage oppotunity will be taken by other traders in the market
+        """
         # get the swap rate
         self.swap_rate2 = self.get_rule_base_action()
-        # self.urgent_level = action[1] * self.urgent_multiplier
-        self.urgent_level = 0.25
-        self.swap_rate1 = action[0] * 0.01
+        self.urgent_level = action[1] * self.urgent_multiplier
+        self.swap_rate1 = action[0] * 0.2
 
         # process trades and update the reward and fee
         self.rew1, self.rew2, fee1, fee2 = self.process_trades()
@@ -106,19 +109,7 @@ class MultiAgentAmm(Env):
         fee = info['fee']
         amm_cost = (asset_delta[asset_in] + fee[asset_in]) * self.market.get_ask_price(asset_in)
         market_gain = (abs(asset_delta[asset_out])) * self.market.get_bid_price(asset_out)
-        reward = (market_gain - amm_cost) / market_gain
-        details = {
-            'asset_in': asset_in,
-            'asset_out': asset_out,
-            'asset_delta_in': asset_delta[asset_in],
-            'asset_delta_out': asset_delta[asset_out],
-            'fee_in': fee[asset_in],
-            'fee_out': fee[asset_out],
-            'amm_cost': amm_cost,
-            'market_gain': market_gain,
-            'reserve_a': self.amm.reserve_a,
-            'reserve_b': self.amm.reserve_b
-        }
+        reward = (market_gain - amm_cost) / market_gain if swap_rate != 0 else 0
         return reward, fee
 
     def process_trades(self):
@@ -147,7 +138,7 @@ class MultiAgentAmm(Env):
                 rew1, fee1 = self.execute_trade(self.swap_rate1, asset_in1, asset_out1)
         else:
             asset_in2, asset_out2 = determine_assets(self.swap_rate2)
-            rew2, fee2, details2 = self.execute_trade(self.swap_rate2, asset_in2, asset_out2)
+            rew2, fee2 = self.execute_trade(self.swap_rate2, asset_in2, asset_out2)
             rew1 = 0
 
         return rew1, rew2, fee1, fee2

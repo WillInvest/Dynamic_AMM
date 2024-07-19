@@ -27,7 +27,7 @@ from stable_baselines3.common.callbacks import BaseCallback, CheckpointCallback,
 
 def train(root_path):
     
-    TOTAL_STEPS = int(1e6)
+    TOTAL_STEPS = int(1e7)
     EVALUATE_PER_STEP = int(1e4)
     LEARNING_RATE = 0.0001
     
