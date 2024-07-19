@@ -13,10 +13,11 @@ class AMM:
         self.initial_b = initial_b
         
     def get_random_fee(self):
-        return round(random.uniform(0.0001, 0.3), 4)
+        return round(random.uniform(0.0001, 0.03), 4)
     
-    def next(self):
-        self.fee = self.get_random_fee()
+    def next(self, random=False):
+        if random:
+            self.fee = self.get_random_fee()
     
     def get_price(self):
         return self.reserve_b / self.reserve_a
