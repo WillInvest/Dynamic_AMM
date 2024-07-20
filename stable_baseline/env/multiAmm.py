@@ -66,7 +66,7 @@ class MultiAgentAmm(Env):
         """
         # get the swap rate
         self.swap_rate2 = self.get_rule_base_action()
-        self.urgent_level = action[1] * self.urgent_multiplier
+        self.urgent_level = action[1] 
         self.swap_rate1 = action[0] * 0.2
 
         # process trades and update the reward and fee
@@ -123,8 +123,8 @@ class MultiAgentAmm(Env):
         fee2 = {'A': 0, 'B': 0}
 
         # urgent_level is greater than the fee rate, which means the agent can accept current fee rate
-        if self.urgent_level >= self.amm.fee:
-            if self.urgent_level >= self.market_competence:
+        if self.urgent_level * self.urgent_multiplier >= self.amm.fee:
+            if self.urgent_level >= random.random():
                 asset_in1, asset_out1 = determine_assets(self.swap_rate1)
                 rew1, fee1 = self.execute_trade(self.swap_rate1, asset_in1, asset_out1)
                 

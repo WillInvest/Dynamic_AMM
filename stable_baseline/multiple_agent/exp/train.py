@@ -16,14 +16,12 @@ from stable_baseline.env.market import MarketSimulator
 from stable_baseline.env.new_amm import AMM
 from stable_baseline.env.callback import WandbCallback
 
-import gymnasium as gym
-from stable_baselines3 import PPO, DDPG, TD3
+from stable_baselines3 import PPO
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.common.logger import configure
 from stable_baselines3.common.vec_env import SubprocVecEnv
-from stable_baselines3.common.noise import NormalActionNoise
 from stable_baselines3.common.monitor import Monitor
-from stable_baselines3.common.callbacks import BaseCallback, CheckpointCallback, EvalCallback
+from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
 
 def train(root_path):
     
