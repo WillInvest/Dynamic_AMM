@@ -3,6 +3,7 @@ import random
 
 class AMM:
     def __init__(self, initial_a=10000, initial_b=10000, fee=None):
+        self.initial_shares = initial_a
         self.reserve_a = initial_a
         self.reserve_b = initial_b
         self.k = self.reserve_a * self.reserve_b

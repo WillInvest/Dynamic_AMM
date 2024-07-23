@@ -82,7 +82,7 @@ class MultiAgentAmm(Env):
 
         # Advance market to the next state
         self.market.next()
-        self.amm.next()
+        self.amm.next(random=True)
         next_obs = self.get_obs()
 
         infos = {
