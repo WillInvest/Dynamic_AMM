@@ -10,21 +10,18 @@ from stable_baselines3 import TD3
 import torch
 import math
 import random
-EPSILON = 1e-5
  
 class MultiAgentAmm(Env):
     def __init__(self,
                  market: MarketSimulator,
                  amm: AMM,
-                 market_competence = 0.2
+                 market_competition_level = 0.2
                 ) -> None:
         super().__init__()
         self.amm = amm
         self.market = market
         self.step_count = 0
-        self.max_steps = 500
-        self.urgent_multiplier = 0.03
-        self.market_competence = market_competence
+        self.market_competition_level = market_competition_level
 
         # Initialize the variables used in the step function
         self.rew1 = 0
@@ -36,24 +33,30 @@ class MultiAgentAmm(Env):
         self.urgent_level = 0
         self.total_rewards = 0
         self.cumulative_fee = 0
+        self.cumulative_reward = 0
         self.done = False
         
         # observation space
         self.observation_space = spaces.Box(low=np.array([0., 0., 0., 0., 0.], dtype=np.float32),
                                             high=np.array([np.inf, np.inf, np.inf, np.inf, np.inf], dtype=np.float32))
         # action space
-        self.action_space = spaces.Box(low=np.array([-1., 0.]),
-                                       high=np.array([1., 1.]), dtype=np.float32)
+        # self.action_space = spaces.Box(low=np.array([-1., 0.]),
+        #                                high=np.array([1., 1.]), dtype=np.float32)
+    
+        # Update the action space to be discrete for both actions
+        self.swap_rates = [np.round(rate, 2) for rate in np.arange(-1.0, 1.1, 0.1) if np.round(rate, 2) != 0]
+        self.action_space = spaces.MultiDiscrete([len(self.swap_rates), len(self.amm.fee_rates)])
+
     
     def get_rule_base_action(self):
         obs = self.get_obs()
         market_ask, market_bid, amm_ask, amm_bid = obs[0:4]
         if amm_ask < market_bid:
             swap_rate2 = 1 - math.sqrt(self.amm.reserve_a * self.amm.reserve_b / (market_bid/(1+self.amm.fee))) / self.amm.reserve_a
-            swap_rate2 *= self.market_competence
+            swap_rate2 *= self.market_competition_level
         elif amm_bid > market_ask:
             swap_rate2 = math.sqrt((self.amm.reserve_a*self.amm.reserve_b*market_ask*(1+self.amm.fee)))/self.amm.reserve_b - 1
-            swap_rate2 *= self.market_competence
+            swap_rate2 *= self.market_competition_level
         else:
             swap_rate2 = 0
 
@@ -62,12 +65,12 @@ class MultiAgentAmm(Env):
     def step(self, action: np.array) -> Tuple[np.array, float, bool, bool, dict]:
         """
         urgent level determine whether agent place order or not.
-        market competence determine how much percent of arbitrage oppotunity will be taken by other traders in the market
+        market competition level determine how much percent of arbitrage oppotunity will be taken by other traders in the market
         """
         # get the swap rate
         self.swap_rate2 = self.get_rule_base_action()
-        self.urgent_level = action[1] 
-        self.swap_rate1 = action[0] * 0.2
+        self.urgent_level = self.amm.fee_rates[action[1]]
+        self.swap_rate1 = self.swap_rates[action[0]] * 0.05
 
         # process trades and update the reward and fee
         self.rew1, self.rew2, fee1, fee2 = self.process_trades()
@@ -75,9 +78,10 @@ class MultiAgentAmm(Env):
         self.fee2 = fee2['A'] + fee2['B']
         self.total_rewards = self.rew1 + self.rew2
         self.cumulative_fee += self.fee1 + self.fee2
+        self.cumulative_reward += self.rew1
         self.step_count += 1
 
-        if self.step_count >= self.max_steps or self.market.index == self.market.steps:
+        if self.step_count == self.market.steps or min(self.amm.reserve_a, self.amm.reserve_b) < self.amm.initial_shares * 0.2:
             self.done = True
 
         # Advance market to the next state
@@ -95,6 +99,7 @@ class MultiAgentAmm(Env):
             'urgent_level': self.urgent_level,
             'total_rewards': self.total_rewards,
             'cumulative_fee': self.cumulative_fee,
+            'cumulative_reward': self.cumulative_reward,
             'amm_fee': self.amm.fee,
             'market_sigma': self.market.sigma
         }
@@ -109,7 +114,7 @@ class MultiAgentAmm(Env):
         fee = info['fee']
         amm_cost = (asset_delta[asset_in] + fee[asset_in]) * self.market.get_ask_price(asset_in)
         market_gain = (abs(asset_delta[asset_out])) * self.market.get_bid_price(asset_out)
-        reward = (market_gain - amm_cost) / market_gain if swap_rate != 0 else 0
+        reward = (market_gain - amm_cost) / self.market.initial_price if swap_rate != 0 else 0
         return reward, fee
 
     def process_trades(self):
@@ -123,19 +128,13 @@ class MultiAgentAmm(Env):
         fee2 = {'A': 0, 'B': 0}
 
         # urgent_level is greater than the fee rate, which means the agent can accept current fee rate
-        if self.urgent_level * self.urgent_multiplier >= self.amm.fee:
-            if self.urgent_level >= random.random():
+        if self.urgent_level >= self.amm.fee:
                 asset_in1, asset_out1 = determine_assets(self.swap_rate1)
                 rew1, fee1 = self.execute_trade(self.swap_rate1, asset_in1, asset_out1)
+                rew1 *= (1-self.urgent_level)
                 
                 asset_in2, asset_out2 = determine_assets(self.swap_rate2)
                 rew2, fee2 = self.execute_trade(self.swap_rate2, asset_in2, asset_out2)
-            else:
-                asset_in2, asset_out2 = determine_assets(self.swap_rate2)
-                rew2, fee2 = self.execute_trade(self.swap_rate2, asset_in2, asset_out2)
-
-                asset_in1, asset_out1 = determine_assets(self.swap_rate1)
-                rew1, fee1 = self.execute_trade(self.swap_rate1, asset_in1, asset_out1)
         else:
             asset_in2, asset_out2 = determine_assets(self.swap_rate2)
             rew2, fee2 = self.execute_trade(self.swap_rate2, asset_in2, asset_out2)
@@ -149,6 +148,7 @@ class MultiAgentAmm(Env):
         self.done = False
         self.step_count = 0
         self.cumulative_fee = 0
+        self.cumulative_reward = 0
         self.total_rewards = 0
         self.amm.reset()
         self.market.reset()

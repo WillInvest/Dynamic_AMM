@@ -7,18 +7,22 @@ class AMM:
         self.reserve_a = initial_a
         self.reserve_b = initial_b
         self.k = self.reserve_a * self.reserve_b
-        self.fee = fee if fee is not None else self.get_random_fee()
         self.fee_a = 0
         self.fee_b = 0
         self.initial_a = initial_a
         self.initial_b = initial_b
-        
+        self.max_fee_rate = 0.005
+        self.min_fee_rate = 0.0005
+        self.num_slices = 10
+        self.fee_rates = np.linspace(self.min_fee_rate, self.max_fee_rate, self.num_slices)
+        self.fee = fee if fee is not None else self.get_random_fee()
+
     def get_random_fee(self):
-        return round(random.uniform(0.0001, 0.03), 4)
+        return random.choice(self.fee_rates)
     
     def next(self, random=False):
         if random:
-            self.fee = self.get_random_fee()
+            self.fee = round(self.get_random_fee(), 4)
     
     def get_price(self):
         return self.reserve_b / self.reserve_a

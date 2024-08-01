@@ -22,22 +22,24 @@ class WandbCallback(BaseCallback):
         # details2_flat = self.flatten_dict(infos['details2'])
         # details3_flat = self.flatten_dict(infos['details3'])
 
+        done = self.locals['dones'][0]
 
         # Log data including flattened details
-        log_data = {
-            "step": self.num_timesteps,
-            "rew1": infos['rew1'],
-            "rew2": infos['rew2'],
-            "fee1": infos['fee1'],
-            "fee2": infos['fee2'],
-            "swap_rate1": infos['swap_rate1'],
-            "swap_rate2": infos['swap_rate2'],
-            "urgent_level": infos['urgent_level'],
-            "total_rewards": infos['total_rewards'],
-            "cumulative_fee": infos['cumulative_fee'],
-            "amm_fee": self.training_env.get_attr('amm')[0].fee,
-            "market_sigma": self.training_env.get_attr('market')[0].sigma,
-        }
+        # log_data = {
+        #     "step": self.num_timesteps,
+        #     "rew1": infos['rew1'],
+        #     "rew2": infos['rew2'],
+        #     "fee1": infos['fee1'],
+        #     "fee2": infos['fee2'],
+        #     "swap_rate1": infos['swap_rate1'],
+        #     "swap_rate2": infos['swap_rate2'],
+        #     "urgent_level": infos['urgent_level'],
+        #     "total_rewards": infos['total_rewards'],
+        #     "cumulative_fee": infos['cumulative_fee'],
+        #     "amm_fee": self.training_env.get_attr('amm')[0].fee,
+        #     "market_sigma": self.training_env.get_attr('market')[0].sigma,
+        #     "cumulative_reward": infos['cumulative_reward']
+        # }
 
         # Add flattened details
         # log_data.update(details1_flat)
@@ -53,14 +55,21 @@ class WandbCallback(BaseCallback):
             "Fees/fee1": infos['fee1'],
             "Fees/fee2": infos['fee2'],
             "Swap Rates/swap_rate1": infos['swap_rate1'],
-            "Swap Rates/swap_rate2": infos['swap_rate2'],
+            "Swap Rates/swap_rate2": infos['swap_rate2']
             # "Detail1/Details1": infos['details1'],
             # "Detail2/Details2": infos['details2'],
             # "Detail3/Details3": infos['details3'],
-            "Misc/urgent_level": infos['urgent_level'],
-            "Misc/amm_fee": self.training_env.get_attr('amm')[0].fee,
-            "Misc/market_sigma": self.training_env.get_attr('market')[0].sigma
+            # "Misc/urgent_level": infos['urgent_level'],
+            # "Misc/amm_fee": self.training_env.get_attr('amm').fee,
+            # "Misc/market_sigma": self.training_env.get_attr('market').sigma
         })
+        
+        if done:
+            wandb.log({
+                "cumulative_fee": infos['cumulative_fee'],
+                "cumulative_reward": infos['cumulative_reward']
+            })
+        
 
         return True
 

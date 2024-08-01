@@ -7,14 +7,16 @@ class MarketSimulator:
     def __init__(self,
                  start_price=100,
                  mu=0.1,
-                 sigma=0.5,
+                 sigma=0.2,
                  epsilon=0.01,
                  dt=0.01,
                  deterministic=False,
                  steps=500,
-                 seed=None):
-        if seed is not None:
-            np.random.seed(seed)
+                 seed=0):
+        
+        # self.max_seed = 30
+        self.seed = seed 
+        self.rng = np.random.default_rng(self.seed)
         self.initial_price = start_price
         self.initial_mu = mu
         self.initial_sigma = sigma
@@ -36,7 +38,7 @@ class MarketSimulator:
         self.pathB = self.get_zigzag(steps=self.steps, high=1.2, low=0.8)
 
     def get_random_sigma(self):
-        return np.random.uniform(0.01, 1.0)
+        return self.rng.uniform(0.01, 1.0)
     
     def get_zigzag(self, steps, high, low):
         
@@ -76,9 +78,9 @@ class MarketSimulator:
 
     def next(self):
         
-        self.sigma = self.get_random_sigma()
-        self.sigmaA = self.sigma
-        self.sigmaB = self.sigmaA/2
+        # self.sigma = self.get_random_sigma()
+        # self.sigmaA = self.sigma
+        # self.sigmaB = self.sigmaA/2
         
         if self.deterministic:
             
@@ -88,8 +90,8 @@ class MarketSimulator:
             self.index += 1
         else:
             # Stochastic update, random shock
-            shock1 = np.random.normal()
-            shock2 = np.random.normal()
+            shock1 = self.rng.normal()
+            shock2 = self.rng.normal()
 
             # Update the current price using the GBM formula
             self.AP *= np.exp(
@@ -106,7 +108,8 @@ class MarketSimulator:
         self.epsilon = self.initial_epsilon
         self.dt = self.initial_dt
         self.index = 0  # Reset shock index
-
+        # self.seed += 1
+        # self.rng = np.random.default_rng(self.seed)
 
 if __name__ == '__main__':
     # Set the seed for reproducibility
