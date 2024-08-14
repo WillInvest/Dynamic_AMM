@@ -27,9 +27,9 @@ def train(root_path):
         mc = round(mc, 2)
         wandb.init(project="AMM_Trader_Train",
                    entity='willinvest',
-                   name=f'mc_{mc:.2f}',
+                   name=f'{os.path.expanduser('~')}_mc_{mc:.2f}',
                    config={"market_competition_level": mc})
-        model_dirs = os.path.join(root_path, "trader_model", f"{os.path.expanduser('~')}_market_competition_level_{mc:.2f}")
+        model_dirs = os.path.join(root_path, "trader_model", f"market_competition_level_{mc:.2f}")
         os.makedirs(model_dirs, exist_ok=True)
                     
         envs = [lambda: Monitor(MultiAgentAmm(market=MarketSimulator(seed=seed, steps=500),
