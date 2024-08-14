@@ -138,6 +138,6 @@ def main(trader_dir, maker_dir, iterations=300):
     df.to_csv(csv_file_path, index=False)
     
 if __name__ == "__main__":
-    trader_dir = '/Users/haofu/AMM-Python/models/models_trader_final'
-    maker_dir = '/Users/haofu/AMM-Python/models/market_maker_final/rl_maker_40000000_steps.zip'
+    trader_dir = f'{os.path.expanduser("~")}/AMM-Python/models/trader_model'
+    maker_dir = f'{os.path.expanduser("~")}/AMM-Python/models/maker_model/rl_maker_40000000_steps.zip'
     main(trader_dir, maker_dir, iterations=1000)

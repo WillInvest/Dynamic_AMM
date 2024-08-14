@@ -50,5 +50,5 @@ past_multiple_agent_results
 logs/   
 *.txt
 *.csv
-
+# *.zip
 past_models/
