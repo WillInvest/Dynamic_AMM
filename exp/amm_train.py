@@ -1,6 +1,7 @@
 import os
 import csv
 import wandb
+import argparse
 
 # env related
 from env.market import MarketSimulator
@@ -78,23 +79,22 @@ class WandbCallback(BaseCallback):
                 self.log_headers_written = True
             writer.writerow(log_data)
 
-def train(root_path):
+def train(root_path, sigma):
     
     TOTAL_STEPS = int(1e8)
     EVALUATE_PER_STEP = int(1e4)
-    model_dirs = os.path.join(root_path, "market_maker_final")
+    model_dirs = os.path.join(root_path, "maker_model")
     os.makedirs(model_dirs, exist_ok=True)
-    trader_dirs = os.path.join(root_path, "models_trader_final")
+    trader_dirs = os.path.join(root_path, "trader_model")
 
-    wandb.init(project=f"AMM_RL_Market_Maker_Level_final",
-               entity='willinvest',
-               mode='disabled')
+    wandb.init(project=f"AMM_Maker_Train",
+               entity='willinvest')
                     
-    envs = [lambda: Monitor(DynamicAMM(market=MarketSimulator(seed=seed),
+    envs = [lambda: Monitor(DynamicAMM(market=MarketSimulator(seed=seed, sigma=sigma),
                                             amm=AMM(),
                                             trader_dir=trader_dirs)) for seed in range(10)]
     env = SubprocVecEnv(envs)
-    model = PPO("MlpPolicy", env=env, n_steps=int(1e4))
+    model = PPO("MlpPolicy", env=env, n_steps=int(1e4), batch_size=int(1e4))
         
     checkpoint_callback = CheckpointCallback(save_freq=EVALUATE_PER_STEP, save_path=model_dirs, name_prefix="rl_maker")
     wandb_callback = WandbCallback()
@@ -104,5 +104,10 @@ def train(root_path):
     wandb.finish()
 
 if __name__ == '__main__':
-    ROOT_DIR = '/Users/haofu/AMM-Python/models'
-    train(ROOT_DIR)
+    # add sigma as an argument
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--sigma', type=float, default=0.1)
+    args = parser.parse_args()
+    
+    ROOT_DIR = f'{os.path.expanduser("~")}/AMM-Python/models'
+    train(ROOT_DIR, args.sigma)

@@ -23,13 +23,13 @@ def get_trader_obs(market, amm) -> np.array:
         amm.fee
         ], dtype=np.float32)
 
-def simulate_with_constant_fee_rate(traders, fee_rate, seed) -> dict:
+def simulate_with_constant_fee_rate(traders, fee_rate, seed, sigma) -> dict:
     """
     urgent level determine whether agent place order or not.
     market competence determine how much percent of arbitrage opportunity will be taken by other traders in the market
     """
     amm = AMM(fee=fee_rate)
-    market = MarketSimulator(seed=seed)
+    market = MarketSimulator(seed=seed, sigma=sigma)
 
     market_steps = 0
     price_distance = 0
@@ -86,10 +86,10 @@ def simulate_with_constant_fee_rate(traders, fee_rate, seed) -> dict:
             
     return total_pnl, total_fee, total_volume, price_distance
 
-def simulate_with_rl_amm(traders, seed, maker_dir) -> Dict[float, List[float]]:
+def simulate_with_rl_amm(traders, seed, maker_dir, sigma) -> Dict[float, List[float]]:
     initial_fee_rate = 0.01
     amm = AMM(fee=initial_fee_rate)
-    market = MarketSimulator(seed=seed)
+    market = MarketSimulator(seed=seed, sigma=sigma)
     model_dir = maker_dir
     amm_agent = PPO.load(model_dir)
     

@@ -17,7 +17,7 @@ class DynamicAMM(Env):
         self.traders = {}
         for mc in np.arange(0.02, 0.22, 0.02):
             mc = round(mc, 2)
-            model_path = os.path.join(trader_dir, f'market_competition_level_{mc:.2f}', 'rl_model_1000000_steps.zip')
+            model_path = os.path.join(trader_dir, f'market_competition_level_{mc:.2f}', 'rl_model_5000000_steps.zip')
             self.traders[mc] = PPO.load(model_path)
             print(f"Loaded trader with competition level of {mc:.2f}")
         assert len(self.traders) > 0, "No traders loaded"
