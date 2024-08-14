@@ -152,12 +152,7 @@ def simulate_with_rl_amm(traders, seed, maker_dir) -> Dict[float, List[float]]:
                 break
         # record the price discrepancy between AMM and external market
         market_ask, market_bid, amm_ask, amm_bid = trader_obs[:4]
-        if market_ask < amm_bid:
-            price_distance += abs(market_ask - amm_bid)
-        elif market_bid > amm_ask:
-            price_distance += abs(amm_ask - market_bid)
-        else:
-            price_distance += 0
+        price_distance += abs((market_ask + market_bid)/2 - (amm_ask + amm_bid)/2)
             
         market.next()
         market_steps += 1

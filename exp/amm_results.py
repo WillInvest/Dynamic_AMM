@@ -1,5 +1,9 @@
 import os
+import sys
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.append(project_root)
 import csv
+import pandas as pd
 from typing import Dict, List
 import numpy as np
 from stable_baselines3 import PPO
@@ -91,6 +95,7 @@ def main(trader_dir, maker_dir, iterations=300):
         print(f"Seed {seed}: Total PnL for RL: {total_pnl_sum}")
         print(f"Seed {seed}: Total Fee for RL: {total_fee_sum}")
         print(f"Seed {seed}: Total Volume for RL: {total_vol_sum}")
+        print(f"Seed {seed}: Dynamic Fee Rate: {np.mean(dynamic_fees)}")
         print(f"Seed {seed}: Total price_distance for RL: {price_distance}")
         
     # Save merged results to CSV
@@ -98,6 +103,8 @@ def main(trader_dir, maker_dir, iterations=300):
     save_merged_results_to_csv(results_dir, "total_fees.csv", total_fees_constant, total_fees_rl)
     save_merged_results_to_csv(results_dir, "total_vols.csv", total_vols_constant, total_vols_rl)
     save_merged_results_to_csv(results_dir, "total_price_distance.csv", total_price_distance_constant, total_price_distance_rl)
+    total_dynamic_fee = pd.DataFrame(total_dynamic_fee)
+    total_dynamic_fee.to_csv(os.path.join(results_dir, "total_dynamic_fee.csv"), index=False)
 
     # Plot results
     plot_total_pnls(total_pnls_constant, total_pnls_rl)
@@ -110,4 +117,4 @@ def main(trader_dir, maker_dir, iterations=300):
 if __name__ == "__main__":
     trader_dir = '/Users/haofu/AMM-Python/models/models_trader_final'
     maker_dir = '/Users/haofu/AMM-Python/models/market_maker_final/rl_maker_40000000_steps.zip'
-    main(trader_dir, maker_dir, iterations=3)
+    main(trader_dir, maker_dir, iterations=1000)

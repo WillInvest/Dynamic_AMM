@@ -18,7 +18,7 @@ def plot_total_pnls(total_pnls_constant, total_pnls_rl):
     plt.ylabel('Total PnL')
     plt.title('Total PnL for Different Fee Structures')
     # Rotate x-axis labels
-    plt.xticks(rotation=45, ha='right')
+    plt.xticks(rotation=20, ha='right')
     plt.grid(True)
     plt.show()
     plt.savefig('total_pnl_boxplot.png')
@@ -59,7 +59,7 @@ def plot_total_vols(total_vols_constant, total_vols_rl):
     plt.ylabel('Total Trade Counts')
     plt.title('Total trade counts for Different Fee Structures')
     # Rotate x-axis labels
-    plt.xticks(rotation=45, ha='right')
+    plt.xticks(rotation=20, ha='right')
     plt.grid(True)
     plt.show()
     plt.savefig('total_vol_boxplot.png')
@@ -77,7 +77,7 @@ def plot_total_dynamic_fee(total_dynamic_fee):
     # Set title
     plt.title('Distribution of Dynamic Fee Rates')
     # Rotate x-axis labels
-    plt.xticks(rotation=45, ha='right')
+    plt.xticks(rotation=20, ha='right')
     # Display grid
     plt.grid(True)
     # Tight layout for better spacing
@@ -103,7 +103,7 @@ def plot_total_price_distance(total_price_distance_constant, total_price_distanc
     plt.ylabel('Total price_distance')
     plt.title('Total price_distance for Different Fee Structures')
     # Rotate x-axis labels
-    plt.xticks(rotation=45, ha='right')
+    plt.xticks(rotation=20, ha='right')
     plt.grid(True)
     plt.show()
     plt.savefig('total_price_distance_boxplot.png')
