@@ -43,6 +43,6 @@ def train(root_path):
         wandb.finish()
 
 if __name__ == '__main__':
-    ROOT_DIR = '/Users/haofu/AMM-Python/models'
+    ROOT_DIR = f'{os.path.expanduser("~")}/AMM-Python/models'
     train(ROOT_DIR)
     
