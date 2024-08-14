@@ -42,7 +42,6 @@ wandb/
 /src/data/crypto_data/
 /src/data/.DS_Store
 
-*.zip
 *.png
 .history/
 past_result/
