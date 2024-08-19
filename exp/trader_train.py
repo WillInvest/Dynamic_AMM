@@ -23,7 +23,7 @@ def train(root_path):
     TOTAL_STEPS = int(5e6)
     EVALUATE_PER_STEP = int(1e4)
     
-    for mc in np.arange(0.02, 0.22, 0.02):
+    for mc in np.arange(0.14, 0.22, 0.02):
         mc = round(mc, 2)
         wandb.init(project="AMM_Trader_Train",
                    entity='willinvest',
@@ -45,4 +45,14 @@ def train(root_path):
 if __name__ == '__main__':
     ROOT_DIR = f'{os.path.expanduser("~")}/AMM-Python/models'
     train(ROOT_DIR)
+    
+    
+    
+    """
+    1. calculate the mean and variance of BitCoin and replace it with the GBM parameters
+    2. use rule-based agent with different parameters (amount of arbitrage to consume)
+    3. amm_env TODO: create a fake AMM to test whether the swap will generate positive PnL
+    4. check how much arbitrage left after traders place orders
+    
+    """
     

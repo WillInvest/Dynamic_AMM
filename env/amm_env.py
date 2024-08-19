@@ -87,6 +87,7 @@ class DynamicAMM(Env):
         for action in trader_actions:
             urgent_level, swap_rate, mc = action
             if urgent_level >= self.amm.fee:
+                # TODO: create a fake AMM to test whether the swap will generate positive PnL
                 swap_rates[mc] = swap_rate
                 info = self.amm.swap(swap_rate)
                 if swap_rate < 0:

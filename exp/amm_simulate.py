@@ -36,6 +36,7 @@ def simulate_with_constant_fee_rate(traders, fee_rate, seed, sigma) -> dict:
     total_pnl = {mc: 0.0 for mc in traders.keys()}
     total_fee = {mc: 0.0 for mc in traders.keys()}
     total_volume = {mc: 0.0 for mc in traders.keys()}
+    total_transactions = {mc: 0.0 for mc in traders.keys()}
     traders_to_process = list(traders.keys())
 
     # get the trader observation
@@ -72,6 +73,7 @@ def simulate_with_constant_fee_rate(traders, fee_rate, seed, sigma) -> dict:
                     total_pnl[mc] += pnl
                     total_fee[mc] += (fee['A'] + fee['B'])
                     total_volume[mc] += 1
+                    total_transactions[mc] += (amm_cost + market_gain)
             else:
                 # If the highest urgency level is not higher than the fee rate, stop processing
                 break
@@ -84,7 +86,7 @@ def simulate_with_constant_fee_rate(traders, fee_rate, seed, sigma) -> dict:
         market.next()
         market_steps += 1
             
-    return total_pnl, total_fee, total_volume, price_distance
+    return total_pnl, total_fee, total_volume, price_distance, total_transactions
 
 def simulate_with_rl_amm(traders, seed, maker_dir, sigma) -> Dict[float, List[float]]:
     initial_fee_rate = 0.01
@@ -98,6 +100,7 @@ def simulate_with_rl_amm(traders, seed, maker_dir, sigma) -> Dict[float, List[fl
     total_pnl = {mc: 0.0 for mc in traders.keys()}
     total_fee = {mc: 0.0 for mc in traders.keys()}
     total_volume = {mc: 0.0 for mc in traders.keys()}
+    total_transactions = {mc: 0.0 for mc in traders.keys()}
     dynamic_fees = []
 
     traders_to_process = list(traders.keys())
@@ -147,6 +150,7 @@ def simulate_with_rl_amm(traders, seed, maker_dir, sigma) -> Dict[float, List[fl
                     total_pnl[mc] += pnl
                     total_fee[mc] += (fee['A'] + fee['B'])
                     total_volume[mc] += 1
+                    total_transactions[mc] += (amm_cost + market_gain)
             else:
                 # If the highest urgency level is not higher than the fee rate, stop processing
                 break
@@ -157,4 +161,4 @@ def simulate_with_rl_amm(traders, seed, maker_dir, sigma) -> Dict[float, List[fl
         market.next()
         market_steps += 1
 
-    return total_pnl, total_fee, total_volume, dynamic_fees, price_distance
+    return total_pnl, total_fee, total_volume, dynamic_fees, price_distance, total_transactions

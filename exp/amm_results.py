@@ -2,7 +2,7 @@ import os
 import sys
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(project_root)
-import csv
+from tqdm import tqdm
 import pandas as pd
 from typing import Dict, List
 import numpy as np
@@ -11,7 +11,7 @@ import time
 from amm_simulate import *
 from amm_plot import *
     
-def main(trader_dir, maker_dir, iterations=300):
+def main(trader_dir, maker_dir, iterations=300, verbose=False):
 
     # Create a directory for storing results
     results_dir = "final_results"
@@ -40,49 +40,59 @@ def main(trader_dir, maker_dir, iterations=300):
         total_pnls_constant = {round(fee_rate, 4): [] for fee_rate in fee_rates}
         total_fees_constant = {round(fee_rate, 4): [] for fee_rate in fee_rates}
         total_vols_constant = {round(fee_rate, 4): [] for fee_rate in fee_rates}
+        total_transactions_constant = {round(fee_rate, 4): [] for fee_rate in fee_rates}
         total_price_distance_constant = {round(fee_rate, 4): [] for fee_rate in fee_rates}
 
         # Collect results for constant fee rates
         for fee_rate in total_pnls_constant.keys():
-            for seed in range(iterations):
+            for seed in tqdm(range(iterations), desc=f'Sigma {sigma}, Fee Rate {fee_rate}'):
                 seed = seed + int(time.time())
-                total_pnl, total_fee, total_vol, price_distance = simulate_with_constant_fee_rate(traders, fee_rate, seed, sigma=sigma)
+                total_pnl, total_fee, total_vol, price_distance, total_transaction = simulate_with_constant_fee_rate(traders, fee_rate, seed, sigma=sigma)
                 total_pnl_sum = sum(total_pnl.values())  # Sum the PnL of all traders
                 total_fee_sum = sum(total_fee.values())  # Sum the fee of all traders
                 total_vol_sum = sum(total_vol.values())  # Sum the volume of all traders
+                total_transaction_sum = sum(total_transaction.values())  # Sum the volume of all traders
                 total_pnls_constant[fee_rate].append(total_pnl_sum)
                 total_fees_constant[fee_rate].append(total_fee_sum)
                 total_vols_constant[fee_rate].append(total_vol_sum)
                 total_price_distance_constant[fee_rate].append(price_distance)
-                print(f"Sigma {sigma}, Seed {seed}: Total PnL for fee rate {fee_rate}: {total_pnl_sum}")
-                print(f"Sigma {sigma}, Seed {seed}: Total Fee for fee rate {fee_rate}: {total_fee_sum}")
-                print(f"Sigma {sigma}, Seed {seed}: Total Volume for fee rate {fee_rate}: {total_vol_sum}")
-                print(f"Sigma {sigma}, Seed {seed}: Total price_distance for fee rate {fee_rate}: {price_distance}")
-        
+                total_transactions_constant[fee_rate].append(total_transaction_sum)
+                if verbose:
+                    print(f"Sigma {sigma}, Seed {seed}: Total PnL for fee rate {fee_rate}: {total_pnl_sum}")
+                    print(f"Sigma {sigma}, Seed {seed}: Total Fee for fee rate {fee_rate}: {total_fee_sum}")
+                    print(f"Sigma {sigma}, Seed {seed}: Total Volume for fee rate {fee_rate}: {total_vol_sum}")
+                    print(f"Sigma {sigma}, Seed {seed}: Total price_distance for fee rate {fee_rate}: {price_distance}")
+                    print(f"Sigma {sigma}, Seed {seed}: Total transactions for fee rate {fee_rate}: {total_transaction_sum}")
+            
         # Initialize lists to collect results for RL agent
         total_pnls_rl = []
         total_fees_rl = []
         total_vols_rl = []
         total_dynamic_fee = []
         total_price_distance_rl = []
+        total_transactions_rl = []
 
         # Collect results for RL agent
-        for seed in range(iterations):
+        for seed in tqdm(range(iterations), desc=f'Sigma {sigma}, RL Agent'):
             seed = seed + int(time.time())
-            total_pnl, total_fee, total_vol, dynamic_fees, price_distance = simulate_with_rl_amm(traders, seed, maker_dir, sigma=sigma)
+            total_pnl, total_fee, total_vol, dynamic_fees, price_distance, total_transaction = simulate_with_rl_amm(traders, seed, maker_dir, sigma=sigma)
             total_pnl_sum = sum(total_pnl.values())  # Sum the PnL of all traders
             total_fee_sum = sum(total_fee.values())  # Sum the fee of all traders
             total_vol_sum = sum(total_vol.values())  # Sum the volume of all traders
+            total_transaction_sum = sum(total_transaction.values())  # Sum the volume of all traders
             total_pnls_rl.append(total_pnl_sum)
             total_fees_rl.append(total_fee_sum)
             total_vols_rl.append(total_vol_sum)
             total_dynamic_fee.extend(dynamic_fees)
             total_price_distance_rl.append(price_distance)
-            print(f"Sigma {sigma}, Seed {seed}: Total PnL for RL: {total_pnl_sum}")
-            print(f"Sigma {sigma}, Seed {seed}: Total Fee for RL: {total_fee_sum}")
-            print(f"Sigma {sigma}, Seed {seed}: Total Volume for RL: {total_vol_sum}")
-            print(f"Sigma {sigma}, Seed {seed}: Dynamic Fee Rate: {np.mean(dynamic_fees)}")
-            print(f"Sigma {sigma}, Seed {seed}: Total price_distance for RL: {price_distance}")
+            total_transactions_rl.append(total_transaction_sum)
+            if verbose:
+                print(f"Sigma {sigma}, Seed {seed}: Total PnL for RL: {total_pnl_sum}")
+                print(f"Sigma {sigma}, Seed {seed}: Total Fee for RL: {total_fee_sum}")
+                print(f"Sigma {sigma}, Seed {seed}: Total Volume for RL: {total_vol_sum}")
+                print(f"Sigma {sigma}, Seed {seed}: Dynamic Fee Rate: {np.mean(dynamic_fees)}")
+                print(f"Sigma {sigma}, Seed {seed}: Total price_distance for RL: {price_distance}")
+                print(f"Sigma {sigma}, Seed {seed}: Total transactions for RL: {total_transaction_sum}")
 
         # Store the results for this sigma value in the unified results dictionary
         results[sigma] = {
@@ -90,14 +100,16 @@ def main(trader_dir, maker_dir, iterations=300):
                 'total_pnls': total_pnls_constant,
                 'total_fees': total_fees_constant,
                 'total_vols': total_vols_constant,
-                'total_price_distance': total_price_distance_constant
+                'total_price_distance': total_price_distance_constant,
+                'total_transactions': total_transactions_constant
             },
             'rl': {
                 'total_pnls_rl': total_pnls_rl,
                 'total_fees_rl': total_fees_rl,
                 'total_vols_rl': total_vols_rl,
                 'total_dynamic_fee': total_dynamic_fee,
-                'total_price_distance_rl': total_price_distance_rl
+                'total_price_distance_rl': total_price_distance_rl,
+                'total_transactions_rl': total_transactions_rl
             }
         }
     
@@ -115,7 +127,8 @@ def main(trader_dir, maker_dir, iterations=300):
                     'fee': data['constant']['total_fees'][fee_rate][i],
                     'volume': data['constant']['total_vols'][fee_rate][i],
                     'price_distance': data['constant']['total_price_distance'][fee_rate][i],
-                    'dynamic_fee': fee_rate
+                    'dynamic_fee': fee_rate,
+                    'total_transactions': data['constant']['total_transactions'][fee_rate][i]
                 })
 
         # For RL strategy
@@ -127,17 +140,18 @@ def main(trader_dir, maker_dir, iterations=300):
                 'fee': data['rl']['total_fees_rl'][i],
                 'volume': data['rl']['total_vols_rl'][i],
                 'price_distance': data['rl']['total_price_distance_rl'][i],
-                'dynamic_fee': data['rl']['total_dynamic_fee'][i]
+                'dynamic_fee': data['rl']['total_dynamic_fee'][i],
+                'total_transactions': data['rl']['total_transactions_rl'][i]
             })
 
     # Convert to DataFrame
     df = pd.DataFrame(flattened_results)
 
     # Save to CSV
-    csv_file_path = os.path.join(results_dir, 'all_results.csv')
+    csv_file_path = os.path.join(results_dir, 'all_results_814.csv')
     df.to_csv(csv_file_path, index=False)
     
 if __name__ == "__main__":
     trader_dir = f'{os.path.expanduser("~")}/AMM-Python/models/trader_model'
     maker_dir = f'{os.path.expanduser("~")}/AMM-Python/models/maker_model/rl_maker_40000000_steps.zip'
-    main(trader_dir, maker_dir, iterations=1000)
+    main(trader_dir, maker_dir, iterations=300)
