@@ -1,5 +1,7 @@
 import os
 import sys
+import socket
+
 # Get the path to the AMM-Python directory
 sys.path.append(f'{os.path.expanduser("~")}/AMM-Python')
 
@@ -27,7 +29,7 @@ def train(root_path):
         mc = round(mc, 2)
         wandb.init(project="AMM_Trader_Train",
                    entity='willinvest',
-                   name=f'{os.path.expanduser("~")}_mc_{mc:.2f}',
+                   name=f'User-{socket.gethostname()}_mc_{mc:.2f}',
                    config={"market_competition_level": mc})
         model_dirs = os.path.join(root_path, "trader_model", f"market_competition_level_{mc:.2f}")
         log_path = os.path.join(model_dirs, "logs")
