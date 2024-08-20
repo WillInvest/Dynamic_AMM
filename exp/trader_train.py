@@ -32,7 +32,7 @@ def train(root_path):
         model_dirs = os.path.join(root_path, "trader_model", f"market_competition_level_{mc:.2f}")
         log_path = os.path.join(model_dirs, "logs")
         os.makedirs(model_dirs, exist_ok=True)
-        n_envs = 30
+        n_envs = 20
         envs = [lambda: Monitor(MultiAgentAmm(market=MarketSimulator(seed=seed, steps=500),
                                               amm=AMM(),
                                               market_competition_level=mc)) for seed in range(n_envs)]
