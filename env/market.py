@@ -38,7 +38,7 @@ class MarketSimulator:
         self.pathB = self.get_zigzag(steps=self.steps, high=1.2, low=0.8)
 
     def get_random_sigma(self):
-        return self.rng.uniform(0.01, 1.0)
+        return self.rng.choice([0.2, 0.4, 0.6, 0.8, 1.0])
     
     def get_zigzag(self, steps, high, low):
         
@@ -78,9 +78,9 @@ class MarketSimulator:
 
     def next(self):
         
-        # self.sigma = self.get_random_sigma()
-        # self.sigmaA = self.sigma
-        # self.sigmaB = self.sigmaA/2
+        self.sigma = self.get_random_sigma()
+        self.sigmaA = self.sigma
+        self.sigmaB = self.sigmaA/2
         
         if self.deterministic:
             
