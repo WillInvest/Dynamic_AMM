@@ -2,7 +2,9 @@ import os
 import csv
 import wandb
 import argparse
-
+import sys
+# Get the path to the AMM-Python directory
+sys.path.append(f'{os.path.expanduser("~")}/AMM-Python')
 # env related
 from env.market import MarketSimulator
 from env.new_amm import AMM
@@ -90,12 +92,12 @@ def train(root_path, sigma):
     wandb.init(project=f"AMM_Maker_Train",
                entity='willinvest')
     
-    n_envs = 30
+    n_envs = 10
     envs = [lambda: Monitor(DynamicAMM(market=MarketSimulator(seed=seed, sigma=sigma),
                                             amm=AMM(),
                                             trader_dir=trader_dirs)) for seed in range(n_envs)]
     env = SubprocVecEnv(envs)
-    model = PPO("MlpPolicy", env=env, n_steps=int(1e2), batch_size=int(3e2))
+    model = PPO("MlpPolicy", env=env, n_steps=int(1e2), batch_size=int(1e2))
         
     checkpoint_callback = CheckpointCallback(save_freq=EVALUATE_PER_STEP, save_path=model_dirs, name_prefix="rl_maker")
     wandb_callback = WandbCallback()

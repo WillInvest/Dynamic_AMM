@@ -36,7 +36,7 @@ htmlcov
 
 wandb/
 
-
+*.npz
 # local api keys
 /api_key
 /src/data/crypto_data/

@@ -6,10 +6,10 @@ import matplotlib.pyplot as plt
 class MarketSimulator:
     def __init__(self,
                  start_price=100,
-                 mu=0.0001,
-                 sigma=0.005,
+                 mu=0.01,
+                 sigma=0.2,
                  epsilon=0.01,
-                 dt=1,
+                 dt=0.1,
                  deterministic=False,
                  steps=500,
                  seed=0):
@@ -78,9 +78,9 @@ class MarketSimulator:
 
     def next(self):
         
-        self.sigma = self.get_random_sigma()
-        self.sigmaA = self.sigma
-        self.sigmaB = self.sigmaA/2
+        # self.sigma = self.get_random_sigma()
+        # self.sigmaA = self.sigma
+        # self.sigmaB = self.sigmaA/2
         
         if self.deterministic:
             

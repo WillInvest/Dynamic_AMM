@@ -66,6 +66,38 @@ class AMM:
             fees['B'] = 0
 
         return {'asset_delta': asset_delta, 'fee': fees}
+    
+    def simu_swap(self, amount):
+        asset_delta = {'A': 0, 'B': 0}
+        fees = {'A': 0, 'B': 0}
+        if amount >= 0:
+            # Deposit amount of B and get A
+            if amount < 1:
+                new_reserve_a = self.reserve_a * (1-amount)
+            else:
+                new_reserve_a = 1
+            new_reserve_b = self.k / new_reserve_a
+            deposit = new_reserve_b - self.reserve_b
+            fee = deposit * self.fee
+            asset_delta['A'] = new_reserve_a - self.reserve_a
+            asset_delta['B'] = new_reserve_b - self.reserve_b
+            fees['A'] = 0
+            fees['B'] = fee
+        else:
+            # Deposit -amount of A and get B
+            if abs(amount) < 1:
+                new_reserve_b = self.reserve_b * (1+amount)
+            else:
+                new_reserve_b = 1
+            new_reserve_a = self.k / new_reserve_b
+            deposit = new_reserve_a - self.reserve_a
+            fee = deposit * self.fee
+            asset_delta['A'] = new_reserve_a - self.reserve_a
+            asset_delta['B'] = new_reserve_b - self.reserve_b
+            fees['A'] = fee
+            fees['B'] = 0
+
+        return {'asset_delta': asset_delta, 'fee': fees}
 
     def get_reserves(self):
         return self.reserve_a, self.reserve_b

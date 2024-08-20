@@ -53,66 +53,47 @@ class DynamicAMM(Env):
         market competence determine how much percent of arbitrage oppotunity will be taken by other traders in the market
         """
         # Initialize step pnl and fee
-        step_pnl = step_fee = 0
+        reward = 0
         swap_rates = {mc: 0 for mc in self.traders.keys()}
-        # get the fee rate
         self.current_action = action
-        # self.fee_rate = self.current_action * (self.amm.max_fee_rate - self.amm.min_fee_rate) + self.amm.min_fee_rate
         self.fee_rate = round(self.amm.fee_rates[self.current_action], 4)
         self.amm.fee = self.fee_rate
-        # print(f"Fee rate: {self.fee_rate} | amm_fee: {self.amm.fee}")
-        # get the trader observation
         traders_to_process = list(self.traders.keys())
-        
-        # while traders_to_process:
-        # Each trader observes the current state
         trader_obs = self.get_trader_obs()
         trader_actions = []
             
         for mc in traders_to_process:
             trader = self.traders[mc]
             action, _states = trader.predict(trader_obs)
-            # swap_rate, urgent_level = action
-            # print(f"trader: {mc} | swap_rate: {swap_rate} | urgent_level: {urgent_level}")
             swap_rate = self.swap_rates[action[0]] * 0.1
             urgent_level = self.amm.fee_rates[action[1]]
             trader_actions.append((urgent_level, swap_rate, mc))
             
         # Sort by urgent level and get the highest urgency level trader
         trader_actions.sort(reverse=True, key=lambda x: x[0])
-        # highest_urgency_trader = trader_actions[0]
-        # urgent_level, swap_rate, mc = highest_urgency_trader
-            
-            # Execute the trade if the urgency level is higher than the fee rate
         for action in trader_actions:
             urgent_level, swap_rate, mc = action
             if urgent_level >= self.amm.fee:
                 # TODO: create a fake AMM to test whether the swap will generate positive PnL
                 swap_rates[mc] = swap_rate
+                # check profit availability by simulating the swap; if positive, there is remaining arbitrage, then execute the swap
+                # simu_info = self.amm.simu_swap(swap_rate)
+                # simu_pnl, simu_fees = self.calculate_pnl(simu_info, swap_rate)
+                # if simu_pnl > 0:
+                #     info = self.amm.swap(swap_rate)
+                #     pnl, fees = self.calculate_pnl(info, swap_rate)
+                #     self.total_pnl[mc] += pnl
+                #     self.total_fee[mc] += fees
+                #     reward += fees
                 info = self.amm.swap(swap_rate)
-                if swap_rate < 0:
-                    asset_in, asset_out = 'A', 'B'
-                else:
-                    asset_in, asset_out = 'B', 'A'
-                asset_delta = info['asset_delta']
-                fee = info['fee']
-                amm_cost = (asset_delta[asset_in] + fee[asset_in]) * self.market.get_ask_price(asset_in)
-                market_gain = (abs(asset_delta[asset_out])) * self.market.get_bid_price(asset_out)
-                pnl = (market_gain - amm_cost) / self.market.initial_price if swap_rate != 0 else 0    
-                fees = (fee['A'] + fee['B']) / self.market.initial_price
+                pnl, fees = self.calculate_pnl(info, swap_rate)
                 if pnl > 0:
                     self.total_pnl[mc] += pnl
                     self.total_fee[mc] += fees
-                    step_fee += fees
-                    step_pnl += pnl
-                # Remove the trader from the list as it has already executed its order
-                # traders_to_process.remove(mc)
+                    reward += fees
             else:
                 # If the highest urgency level is not higher than the fee rate, stop processing
                 break
-            
-        # print(f"step_pnl: {step_pnl} | step_fee: {step_fee}")
-
             
         infos = {
             "cumulative_fee": sum(self.total_fee.values()),
@@ -121,20 +102,30 @@ class DynamicAMM(Env):
             "total_fee": self.total_fee,
             "swap_rates": swap_rates
             }
-        
-        reward = step_fee #* np.sign(step_pnl)
-        
+
         # increase the step count
         self.step_count += 1
-        
         if self.step_count == self.market.steps or min(self.amm.reserve_a, self.amm.reserve_b) < self.amm.initial_shares * 0.2:
             self.done = True
-
         # Advance market to the next state
         self.market.next()
         next_obs = self.get_obs()
         
         return next_obs, reward, self.done, False, infos
+    
+    
+    def calculate_pnl(self, info, swap_rate):
+        if swap_rate < 0:
+            asset_in, asset_out = 'A', 'B'
+        else:
+            asset_in, asset_out = 'B', 'A'
+        asset_delta = info['asset_delta']
+        fee = info['fee']
+        amm_cost = (asset_delta[asset_in] + fee[asset_in]) * self.market.get_ask_price(asset_in)
+        market_gain = (abs(asset_delta[asset_out])) * self.market.get_bid_price(asset_out)
+        pnl = (market_gain - amm_cost) / self.market.initial_price if swap_rate != 0 else 0  
+        fees = (fee['A'] + fee['B']) / self.market.initial_price
+        return pnl, fees
 
     def reset(self, seed=None):
         super().reset(seed=seed)
