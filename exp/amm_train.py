@@ -12,7 +12,7 @@ from env.amm_env import DynamicAMM
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import SubprocVecEnv
 from stable_baselines3.common.monitor import Monitor
-from stable_baselines3.common.callbacks import CheckpointCallback
+from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
 from stable_baselines3.common.callbacks import BaseCallback
 
 class WandbCallback(BaseCallback):
@@ -81,7 +81,7 @@ class WandbCallback(BaseCallback):
 
 def train(root_path, sigma):
     
-    TOTAL_STEPS = int(1e8)
+    TOTAL_STEPS = int(5e6)
     EVALUATE_PER_STEP = int(1e4)
     model_dirs = os.path.join(root_path, "maker_model")
     os.makedirs(model_dirs, exist_ok=True)
@@ -89,24 +89,32 @@ def train(root_path, sigma):
 
     wandb.init(project=f"AMM_Maker_Train",
                entity='willinvest')
-                    
+    
+    n_envs = 30
     envs = [lambda: Monitor(DynamicAMM(market=MarketSimulator(seed=seed, sigma=sigma),
                                             amm=AMM(),
-                                            trader_dir=trader_dirs)) for seed in range(10)]
+                                            trader_dir=trader_dirs)) for seed in range(n_envs)]
     env = SubprocVecEnv(envs)
-    model = PPO("MlpPolicy", env=env, n_steps=int(1e4), batch_size=int(1e4))
+    model = PPO("MlpPolicy", env=env, n_steps=int(1e2), batch_size=int(3e2))
         
     checkpoint_callback = CheckpointCallback(save_freq=EVALUATE_PER_STEP, save_path=model_dirs, name_prefix="rl_maker")
     wandb_callback = WandbCallback()
+    eval_callback = EvalCallback(env,
+                                 best_model_save_path=model_dirs,
+                                 log_path=model_dirs,
+                                 eval_freq=EVALUATE_PER_STEP,
+                                 n_eval_episodes=30,
+                                 deterministic=True,
+                                 render=False)
         
-    model.learn(total_timesteps=TOTAL_STEPS, callback=[checkpoint_callback, wandb_callback], progress_bar=True)
+    model.learn(total_timesteps=TOTAL_STEPS, callback=[checkpoint_callback, eval_callback, wandb_callback], progress_bar=True)
 
     wandb.finish()
 
 if __name__ == '__main__':
     # add sigma as an argument
     parser = argparse.ArgumentParser()
-    parser.add_argument('--sigma', type=float, default=0.1)
+    parser.add_argument('--sigma', type=float, default=0.2)
     args = parser.parse_args()
     
     ROOT_DIR = f'{os.path.expanduser("~")}/AMM-Python/models'

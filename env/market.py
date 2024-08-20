@@ -9,7 +9,7 @@ class MarketSimulator:
                  mu=0.0001,
                  sigma=0.005,
                  epsilon=0.01,
-                 dt=0.01,
+                 dt=1,
                  deterministic=False,
                  steps=500,
                  seed=0):
