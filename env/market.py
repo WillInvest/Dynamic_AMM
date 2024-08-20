@@ -6,8 +6,8 @@ import matplotlib.pyplot as plt
 class MarketSimulator:
     def __init__(self,
                  start_price=100,
-                 mu=0.1,
-                 sigma=0.2,
+                 mu=0.0001,
+                 sigma=0.005,
                  epsilon=0.01,
                  dt=0.01,
                  deterministic=False,
