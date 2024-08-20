@@ -44,7 +44,7 @@ def train(root_path):
                                      best_model_save_path=model_dirs,
                                      log_path=log_path,
                                      eval_freq=EVALUATE_PER_STEP,
-                                     n_eval_episodes=30,
+                                     n_eval_episodes=300,
                                      deterministic=True,
                                      render=False)
         model.learn(total_timesteps=TOTAL_STEPS, callback=[checkpoint_callback, eval_callback, wandb_callback], progress_bar=True)
