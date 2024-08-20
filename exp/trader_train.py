@@ -32,10 +32,10 @@ def train(root_path):
         model_dirs = os.path.join(root_path, "trader_model", f"market_competition_level_{mc:.2f}")
         log_path = os.path.join(model_dirs, "logs")
         os.makedirs(model_dirs, exist_ok=True)
-                    
+        n_envs = 20
         envs = [lambda: Monitor(MultiAgentAmm(market=MarketSimulator(seed=seed, steps=500),
                                               amm=AMM(),
-                                              market_competition_level=mc)) for seed in range(10)]
+                                              market_competition_level=mc)) for seed in range(n_envs)]
         env = SubprocVecEnv(envs)
         model = PPO("MlpPolicy", env=env, n_steps=int(1e3), batch_size=int(1e4))
         checkpoint_callback = CheckpointCallback(save_freq=EVALUATE_PER_STEP, save_path=model_dirs, name_prefix="rl_trader")
