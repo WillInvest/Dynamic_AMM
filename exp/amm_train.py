@@ -2,7 +2,8 @@ import os
 import csv
 import wandb
 import argparse
-import sys
+import sys  
+import socket
 # Get the path to the AMM-Python directory
 sys.path.append(f'{os.path.expanduser("~")}/AMM-Python')
 # env related
@@ -90,26 +91,27 @@ def train(root_path, sigma):
     trader_dirs = os.path.join(root_path, "trader_model")
 
     wandb.init(project=f"AMM_Maker_Train",
-               entity='willinvest')
+               entity='willinvest',
+               name=f'User-{socket.gethostname()}')
     
     n_envs = 10
     envs = [lambda: Monitor(DynamicAMM(market=MarketSimulator(seed=seed, sigma=sigma),
                                             amm=AMM(),
                                             trader_dir=trader_dirs)) for seed in range(n_envs)]
     env = SubprocVecEnv(envs)
-    model = PPO("MlpPolicy", env=env, n_steps=int(1e2), batch_size=int(1e2))
+    model = PPO("MlpPolicy", env=env, n_steps=int(1e3), batch_size=int(1e3), n_epochs=5)
         
     checkpoint_callback = CheckpointCallback(save_freq=EVALUATE_PER_STEP, save_path=model_dirs, name_prefix="rl_maker")
     wandb_callback = WandbCallback()
-    eval_callback = EvalCallback(env,
-                                 best_model_save_path=model_dirs,
-                                 log_path=model_dirs,
-                                 eval_freq=EVALUATE_PER_STEP,
-                                 n_eval_episodes=30,
-                                 deterministic=True,
-                                 render=False)
+    # eval_callback = EvalCallback(env,
+    #                              best_model_save_path=model_dirs,
+    #                              log_path=model_dirs,
+    #                              eval_freq=EVALUATE_PER_STEP,
+    #                              n_eval_episodes=30,
+    #                              deterministic=True,
+    #                              render=False)
         
-    model.learn(total_timesteps=TOTAL_STEPS, callback=[checkpoint_callback, eval_callback, wandb_callback], progress_bar=True)
+    model.learn(total_timesteps=TOTAL_STEPS, callback=[checkpoint_callback, wandb_callback], progress_bar=True)
 
     wandb.finish()
 
