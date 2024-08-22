@@ -8,6 +8,7 @@ from typing import Dict, List
 import numpy as np
 from stable_baselines3 import PPO
 import time
+from datetime import datetime
 from amm_simulate import *
 from amm_plot import *
     
@@ -32,7 +33,7 @@ def main(trader_dir, maker_dir, iterations=300, verbose=False):
     fee_rates = np.linspace(min_fee_rate, max_fee_rate, num_slices)
     
     # Define sigma values
-    sigma_values = [0.2, 0.4, 0.6, 0.8, 1.0]
+    sigma_values = [0.005, 0.006, 0.007, 0.008, 0.009, 0.01]
     results = {}
 
     for sigma in sigma_values:
@@ -148,10 +149,10 @@ def main(trader_dir, maker_dir, iterations=300, verbose=False):
     df = pd.DataFrame(flattened_results)
 
     # Save to CSV
-    csv_file_path = os.path.join(results_dir, 'all_results_814.csv')
+    csv_file_path = os.path.join(results_dir, f'all_results_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv')
     df.to_csv(csv_file_path, index=False)
     
 if __name__ == "__main__":
     trader_dir = f'{os.path.expanduser("~")}/AMM-Python/models/trader_model'
-    maker_dir = f'{os.path.expanduser("~")}/AMM-Python/models/maker_model/best_model.zip'
+    maker_dir = f'{os.path.expanduser("~")}/AMM-Python/models/maker_model/rl_maker_3000000_steps.zip'
     main(trader_dir, maker_dir, iterations=30)
