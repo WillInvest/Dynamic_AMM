@@ -63,9 +63,7 @@ class MultiAgentAmm(Env):
         market competition level determine how much percent of arbitrage oppotunity will be taken by other traders in the market
         """
         # get the swap rate
-        self.swap_rate2 = self.get_rule_base_action()
-        self.urgent_level = action[1]
-        self.swap_rate1 = action[0]
+        self.swap_rate1, self.urgent_level = action
 
         # process trades and update the reward and fee
         self.rew1, self.rew2, fee1, fee2 = self.process_trades()
@@ -128,9 +126,11 @@ class MultiAgentAmm(Env):
                 rew1, fee1 = self.execute_trade(self.swap_rate1, asset_in1, asset_out1)
                 rew1 = rew1 * (1-self.urgent_level) if rew1 > 0 else rew1
                 
+                self.swap_rate2 = self.get_rule_base_action()
                 asset_in2, asset_out2 = determine_assets(self.swap_rate2)
                 rew2, fee2 = self.execute_trade(self.swap_rate2, asset_in2, asset_out2)
         else:
+            self.swap_rate2 = self.get_rule_base_action()
             asset_in2, asset_out2 = determine_assets(self.swap_rate2)
             rew2, fee2 = self.execute_trade(self.swap_rate2, asset_in2, asset_out2)
             rew1 = 0
