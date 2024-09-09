@@ -6,6 +6,10 @@ import numpy as np
 from gymnasium import spaces, Env
 from stable_baselines3 import PPO
  
+# for sort and avoid lambda to use multiple process
+def get_urgent_level(trader_action):
+    return trader_action[0]
+ 
 class DynamicAMM(Env):
     def __init__(self,
                  market: MarketSimulator,
@@ -70,7 +74,7 @@ class DynamicAMM(Env):
             trader_actions.append((urgent_level, swap_rate, mc))
             
         # Sort by urgent level and get the highest urgency level trader
-        trader_actions.sort(reverse=True, key=lambda x: x[0])
+        trader_actions.sort(reverse=True, key=get_urgent_level)
         for action in trader_actions:
             urgent_level, swap_rate, mc = action
             if urgent_level >= self.amm.fee:

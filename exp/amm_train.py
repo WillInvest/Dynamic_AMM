@@ -2,7 +2,8 @@ import os
 import csv
 import wandb
 import argparse
-import sys
+import sys  
+import socket
 # Get the path to the AMM-Python directory
 sys.path.append(f'{os.path.expanduser("~")}/AMM-Python')
 # env related
@@ -90,7 +91,8 @@ def train(root_path, sigma):
     trader_dirs = os.path.join(root_path, "trader_model")
 
     wandb.init(project=f"AMM_Maker_Train",
-               entity='willinvest')
+               entity='willinvest',
+               name=f'User-{socket.gethostname()}')
     
     n_envs = 10
     envs = [lambda: Monitor(DynamicAMM(market=MarketSimulator(seed=seed, sigma=sigma),
@@ -108,7 +110,15 @@ def train(root_path, sigma):
     #                              n_eval_episodes=30,
     #                              deterministic=True,
     #                              render=False)
+    # eval_callback = EvalCallback(env,
+    #                              best_model_save_path=model_dirs,
+    #                              log_path=model_dirs,
+    #                              eval_freq=EVALUATE_PER_STEP,
+    #                              n_eval_episodes=30,
+    #                              deterministic=True,
+    #                              render=False)
         
+    model.learn(total_timesteps=TOTAL_STEPS, callback=[checkpoint_callback, wandb_callback], progress_bar=True)
     model.learn(total_timesteps=TOTAL_STEPS, callback=[checkpoint_callback, wandb_callback], progress_bar=True)
 
     wandb.finish()
