@@ -2,7 +2,7 @@ import numpy as np
 import random
 
 class AMM:
-    def __init__(self, initial_a=10000, initial_b=10000, fee=None):
+    def __init__(self, initial_a=1000000, initial_b=1000000, fee=None):
         self.initial_shares = initial_a
         self.reserve_a = initial_a
         self.reserve_b = initial_b

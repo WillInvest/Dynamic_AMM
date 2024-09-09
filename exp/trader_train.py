@@ -15,38 +15,39 @@ from env.market import MarketSimulator
 from env.new_amm import AMM
 from env.callback import WandbCallback
 
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO, TD3
 from stable_baselines3.common.vec_env import SubprocVecEnv
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
 
 def train(root_path):
     
-    TOTAL_STEPS = int(5e6)
-    EVALUATE_PER_STEP = int(1e4)
+    TOTAL_STEPS = int(1e7)
+    EVALUATE_PER_STEP = int(1e3)
+    CHECKPOINT_PER_STEP = int(1e4)
     
-    for mc in np.arange(0.02, 0.22, 0.02):
+    for mc in np.arange(0.05, 1.05, 0.05):
         mc = round(mc, 2)
-        wandb.init(project="AMM_Trader_Train",
+        wandb.init(project="Dynamic_AMM_Trader",
                    entity='willinvest',
                    name=f'User-{socket.gethostname()}_mc_{mc:.2f}',
                    config={"market_competition_level": mc})
         model_dirs = os.path.join(root_path, "trader_model", f"market_competition_level_{mc:.2f}")
         log_path = os.path.join(model_dirs, "logs")
         os.makedirs(model_dirs, exist_ok=True)
-        n_envs = 30
-        envs = [lambda: Monitor(MultiAgentAmm(market=MarketSimulator(seed=seed, steps=500),
+        n_envs = 16
+        envs = [lambda: Monitor(MultiAgentAmm(market=MarketSimulator(seed=seed, steps=5000),
                                               amm=AMM(),
                                               market_competition_level=mc)) for seed in range(n_envs)]
         env = SubprocVecEnv(envs)
-        model = PPO("MlpPolicy", env=env, n_steps=int(1e3), batch_size=int(3e3))
-        checkpoint_callback = CheckpointCallback(save_freq=EVALUATE_PER_STEP, save_path=model_dirs, name_prefix="rl_trader")
+        model = TD3("MlpPolicy", env, verbose=1, learning_rate=0.0003, train_freq=(1, 'step'), gradient_steps=-1)
+        checkpoint_callback = CheckpointCallback(save_freq=CHECKPOINT_PER_STEP, save_path=model_dirs, name_prefix="rl_trader")
         wandb_callback = WandbCallback()
         eval_callback = EvalCallback(env,
                                      best_model_save_path=model_dirs,
                                      log_path=log_path,
                                      eval_freq=EVALUATE_PER_STEP,
-                                     n_eval_episodes=300,
+                                     n_eval_episodes=256,
                                      deterministic=True,
                                      render=False)
         model.learn(total_timesteps=TOTAL_STEPS, callback=[checkpoint_callback, eval_callback, wandb_callback], progress_bar=True)

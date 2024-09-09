@@ -22,6 +22,19 @@ def get_trader_obs(market, amm) -> np.array:
         (amm.reserve_b / amm.reserve_a) / (1+amm.fee),
         amm.fee
         ], dtype=np.float32)
+    
+def calculate_pnl(info, swap_rate, market:MarketSimulator) -> tuple:
+    if swap_rate < 0:
+        asset_in, asset_out = 'A', 'B'
+    else:
+        asset_in, asset_out = 'B', 'A'
+    asset_delta = info['asset_delta']
+    fee = info['fee']
+    amm_cost = (asset_delta[asset_in] + fee[asset_in]) * market.get_ask_price(asset_in)
+    market_gain = (abs(asset_delta[asset_out])) * market.get_bid_price(asset_out)
+    pnl = (market_gain - amm_cost) / market.initial_price if swap_rate != 0 else 0  
+    fees = (fee['A'] + fee['B']) / market.initial_price
+    return pnl, fees, amm_cost, market_gain
 
 def simulate_with_constant_fee_rate(traders, fee_rate, seed, sigma) -> dict:
     """
@@ -59,21 +72,32 @@ def simulate_with_constant_fee_rate(traders, fee_rate, seed, sigma) -> dict:
         for action in trader_actions:
             urgent_level, swap_rate, mc = action
             if urgent_level >= amm.fee:
-                info = amm.swap(swap_rate)
-                if swap_rate < 0:
-                    asset_in, asset_out = 'A', 'B'
-                else:
-                    asset_in, asset_out = 'B', 'A'
-                asset_delta = info['asset_delta']
-                fee = info['fee']
-                amm_cost = (asset_delta[asset_in] + fee[asset_in]) * market.get_ask_price(asset_in)
-                market_gain = (abs(asset_delta[asset_out])) * market.get_bid_price(asset_out)
-                pnl = (market_gain - amm_cost)/market.initial_price if swap_rate != 0 else 0    
-                if pnl > 0:
+                # check profit availability by simulating the swap; if positive, there is remaining arbitrage, then execute the swap
+                simu_info = amm.simu_swap(swap_rate)
+                simu_pnl, _, _, _ = calculate_pnl(simu_info, swap_rate, market)
+                if simu_pnl > 0:
+                    info = amm.swap(swap_rate)
+                    pnl, fees, amm_cost, market_gain = calculate_pnl(info, swap_rate, market)
                     total_pnl[mc] += pnl
-                    total_fee[mc] += (fee['A'] + fee['B'])
+                    total_fee[mc] += fees
                     total_volume[mc] += 1
                     total_transactions[mc] += (amm_cost + market_gain)
+                
+                # info = amm.swap(swap_rate)
+                # if swap_rate < 0:
+                #     asset_in, asset_out = 'A', 'B'
+                # else:
+                #     asset_in, asset_out = 'B', 'A'
+                # asset_delta = info['asset_delta']
+                # fee = info['fee']
+                # amm_cost = (asset_delta[asset_in] + fee[asset_in]) * market.get_ask_price(asset_in)
+                # market_gain = (abs(asset_delta[asset_out])) * market.get_bid_price(asset_out)
+                # pnl = (market_gain - amm_cost)/market.initial_price if swap_rate != 0 else 0    
+                # if pnl > 0:
+                #     total_pnl[mc] += pnl
+                #     total_fee[mc] += (fee['A'] + fee['B'])
+                #     total_volume[mc] += 1
+                #     total_transactions[mc] += (amm_cost + market_gain)
             else:
                 # If the highest urgency level is not higher than the fee rate, stop processing
                 break
@@ -136,21 +160,31 @@ def simulate_with_rl_amm(traders, seed, maker_dir, sigma) -> Dict[float, List[fl
         for action in trader_actions:
             urgent_level, swap_rate, mc = action
             if urgent_level >= amm.fee:
-                info = amm.swap(swap_rate)
-                if swap_rate < 0:
-                    asset_in, asset_out = 'A', 'B'
-                else:
-                    asset_in, asset_out = 'B', 'A'
-                asset_delta = info['asset_delta']
-                fee = info['fee']
-                amm_cost = (asset_delta[asset_in] + fee[asset_in]) * market.get_ask_price(asset_in)
-                market_gain = (abs(asset_delta[asset_out])) * market.get_bid_price(asset_out)
-                pnl = (market_gain - amm_cost)/market.initial_price if swap_rate != 0 else 0   
-                if pnl > 0: 
+                simu_info = amm.simu_swap(swap_rate)
+                simu_pnl, _, _, _ = calculate_pnl(simu_info, swap_rate, market)
+                if simu_pnl > 0:
+                    info = amm.swap(swap_rate)
+                    pnl, fees, amm_cost, market_gain = calculate_pnl(info, swap_rate, market)
                     total_pnl[mc] += pnl
-                    total_fee[mc] += (fee['A'] + fee['B'])
+                    total_fee[mc] += fees
                     total_volume[mc] += 1
                     total_transactions[mc] += (amm_cost + market_gain)
+                
+                # info = amm.swap(swap_rate)
+                # if swap_rate < 0:
+                #     asset_in, asset_out = 'A', 'B'
+                # else:
+                #     asset_in, asset_out = 'B', 'A'
+                # asset_delta = info['asset_delta']
+                # fee = info['fee']
+                # amm_cost = (asset_delta[asset_in] + fee[asset_in]) * market.get_ask_price(asset_in)
+                # market_gain = (abs(asset_delta[asset_out])) * market.get_bid_price(asset_out)
+                # pnl = (market_gain - amm_cost)/market.initial_price if swap_rate != 0 else 0   
+                # if pnl > 0: 
+                #     total_pnl[mc] += pnl
+                #     total_fee[mc] += (fee['A'] + fee['B'])
+                #     total_volume[mc] += 1
+                #     total_transactions[mc] += (amm_cost + market_gain)
             else:
                 # If the highest urgency level is not higher than the fee rate, stop processing
                 break

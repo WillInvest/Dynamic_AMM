@@ -1,8 +1,9 @@
 import sys
 import os
- 
-from .market import MarketSimulator
-from .new_amm import AMM
+ # Get the path to the AMM-Python directory
+sys.path.append(f'{os.path.expanduser("~")}/AMM-Python')
+from env.market import MarketSimulator
+from env.new_amm import AMM
 from typing import Tuple
 import numpy as np
 from gymnasium import spaces, Env
@@ -40,13 +41,7 @@ class MultiAgentAmm(Env):
         self.observation_space = spaces.Box(low=np.array([0., 0., 0., 0., 0.], dtype=np.float32),
                                             high=np.array([np.inf, np.inf, np.inf, np.inf, np.inf], dtype=np.float32))
         # action space
-        # self.action_space = spaces.Box(low=np.array([-1., 0.]),
-        #                                high=np.array([1., 1.]), dtype=np.float32)
-    
-        # Update the action space to be discrete for both actions
-        self.swap_rates = [np.round(rate, 2) for rate in np.arange(-1.0, 1.1, 0.1) if np.round(rate, 2) != 0]
-        self.action_space = spaces.MultiDiscrete([len(self.swap_rates), len(self.amm.fee_rates)])
-
+        self.action_space = spaces.Box(low=np.array([-1.0, 0.0]), high=np.array([1.0, 1.0]), shape=(2,), dtype=np.float32)
     
     def get_rule_base_action(self):
         obs = self.get_obs()
@@ -69,8 +64,8 @@ class MultiAgentAmm(Env):
         """
         # get the swap rate
         self.swap_rate2 = self.get_rule_base_action()
-        self.urgent_level = self.amm.fee_rates[action[1]]
-        self.swap_rate1 = self.swap_rates[action[0]] * 0.05
+        self.urgent_level = action[1]
+        self.swap_rate1 = action[0] * 0.05
 
         # process trades and update the reward and fee
         self.rew1, self.rew2, fee1, fee2 = self.process_trades()
@@ -114,7 +109,7 @@ class MultiAgentAmm(Env):
         fee = info['fee']
         amm_cost = (asset_delta[asset_in] + fee[asset_in]) * self.market.get_ask_price(asset_in)
         market_gain = (abs(asset_delta[asset_out])) * self.market.get_bid_price(asset_out)
-        reward = (market_gain - amm_cost) / self.market.initial_price if swap_rate != 0 else 0
+        reward = (market_gain - amm_cost) / (100 * self.market.initial_price) if swap_rate != 0 else 0
         return reward, fee
 
     def process_trades(self):
@@ -131,7 +126,7 @@ class MultiAgentAmm(Env):
         if self.urgent_level >= self.amm.fee:
                 asset_in1, asset_out1 = determine_assets(self.swap_rate1)
                 rew1, fee1 = self.execute_trade(self.swap_rate1, asset_in1, asset_out1)
-                rew1 *= (1-self.urgent_level)
+                rew1 = rew1 * (1-self.urgent_level) if rew1 > 0 else rew1
                 
                 asset_in2, asset_out2 = determine_assets(self.swap_rate2)
                 rew2, fee2 = self.execute_trade(self.swap_rate2, asset_in2, asset_out2)
@@ -176,10 +171,18 @@ class MultiAgentAmm(Env):
         pass
  
 if __name__ == "__main__":
-    market = MarketSimulator(start_price=1, deterministic=True)
-    amm = AMM(initial_a=8000, initial_b=10000, fee=0.02)  # Set your fee rate
+    market = MarketSimulator()
+    amm = AMM()  # Set your fee rate
     env = MultiAgentAmm(market, amm)
+    # sample_action = env.action_space.sample()
+    sample_action = np.array([1, 0.5])
     obs, _ = env.reset()
+    print(f"action: {sample_action}")
+    print(f"obs: {obs}")
+    print(amm.fee)
+    obs, reward, done, truncated, info = env.step(sample_action)
+    
+    print(f"reward: {reward}")
     
 
         

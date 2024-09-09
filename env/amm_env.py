@@ -17,7 +17,7 @@ class DynamicAMM(Env):
         self.traders = {}
         for mc in np.arange(0.02, 0.22, 0.02):
             mc = round(mc, 2)
-            model_path = os.path.join(trader_dir, f'market_competition_level_{mc:.2f}', 'best_model.zip')
+            model_path = os.path.join(trader_dir, f'market_competition_level_{mc:.2f}', 'rl_trader_5000000_steps.zip')
             self.traders[mc] = PPO.load(model_path)
             print(f"Loaded trader with competition level of {mc:.2f}")
         assert len(self.traders) > 0, "No traders loaded"
@@ -77,20 +77,20 @@ class DynamicAMM(Env):
                 # TODO: create a fake AMM to test whether the swap will generate positive PnL
                 swap_rates[mc] = swap_rate
                 # check profit availability by simulating the swap; if positive, there is remaining arbitrage, then execute the swap
-                # simu_info = self.amm.simu_swap(swap_rate)
-                # simu_pnl, simu_fees = self.calculate_pnl(simu_info, swap_rate)
-                # if simu_pnl > 0:
-                #     info = self.amm.swap(swap_rate)
-                #     pnl, fees = self.calculate_pnl(info, swap_rate)
-                #     self.total_pnl[mc] += pnl
-                #     self.total_fee[mc] += fees
-                #     reward += fees
-                info = self.amm.swap(swap_rate)
-                pnl, fees = self.calculate_pnl(info, swap_rate)
-                if pnl > 0:
+                simu_info = self.amm.simu_swap(swap_rate)
+                simu_pnl, simu_fees = self.calculate_pnl(simu_info, swap_rate)
+                if simu_pnl > 0:
+                    info = self.amm.swap(swap_rate)
+                    pnl, fees = self.calculate_pnl(info, swap_rate)
                     self.total_pnl[mc] += pnl
                     self.total_fee[mc] += fees
                     reward += fees
+                # info = self.amm.swap(swap_rate)
+                # pnl, fees = self.calculate_pnl(info, swap_rate)
+                # if pnl > 0:
+                #     self.total_pnl[mc] += pnl
+                #     self.total_fee[mc] += fees
+                #     reward += fees
             else:
                 # If the highest urgency level is not higher than the fee rate, stop processing
                 break
