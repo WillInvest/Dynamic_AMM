@@ -41,7 +41,7 @@ class MultiAgentAmm(Env):
         self.observation_space = spaces.Box(low=np.array([0., 0., 0., 0., 0.], dtype=np.float32),
                                             high=np.array([np.inf, np.inf, np.inf, np.inf, np.inf], dtype=np.float32))
         # action space
-        self.action_space = spaces.Box(low=np.array([-1.0, 0.0]), high=np.array([1.0, 1.0]), shape=(2,), dtype=np.float32)
+        self.action_space = spaces.Box(low=np.array([-0.05, 0.0]), high=np.array([0.05, 1.0]), shape=(2,), dtype=np.float32)
     
     def get_rule_base_action(self):
         obs = self.get_obs()
@@ -65,7 +65,7 @@ class MultiAgentAmm(Env):
         # get the swap rate
         self.swap_rate2 = self.get_rule_base_action()
         self.urgent_level = action[1]
-        self.swap_rate1 = action[0] * 0.05
+        self.swap_rate1 = action[0]
 
         # process trades and update the reward and fee
         self.rew1, self.rew2, fee1, fee2 = self.process_trades()

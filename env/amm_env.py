@@ -4,7 +4,7 @@ from .new_amm import AMM
 from typing import Tuple
 import numpy as np
 from gymnasium import spaces, Env
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO, TD3
  
 # for sort and avoid lambda to use multiple process
 def get_urgent_level(trader_action):
@@ -19,10 +19,10 @@ class DynamicAMM(Env):
         super().__init__()
         
         self.traders = {}
-        for mc in np.arange(0.02, 0.22, 0.02):
+        for mc in np.arange(0.05, 1.05, 0.05):
             mc = round(mc, 2)
-            model_path = os.path.join(trader_dir, f'market_competition_level_{mc:.2f}', 'rl_trader_5000000_steps.zip')
-            self.traders[mc] = PPO.load(model_path)
+            model_path = os.path.join(trader_dir, f'market_competition_level_{mc:.2f}', 'best_model.zip')
+            self.traders[mc] = TD3.load(model_path)
             print(f"Loaded trader with competition level of {mc:.2f}")
         assert len(self.traders) > 0, "No traders loaded"
         self.num_traders = len(self.traders)
@@ -46,10 +46,7 @@ class DynamicAMM(Env):
         self.observation_space = spaces.Box(low=low, high=high, dtype=np.float32)
         
         # action space
-        self.action_space = spaces.Discrete(self.amm.num_slices)
-
-        # self.action_space = spaces.Box(low=np.array([0.]),
-        #                                high=np.array([1.]), dtype=np.float32)
+        self.action_space = spaces.Box(low=0.0005, high=0.005, shape=(1,), dtype=np.float32)
         
     def step(self, action: np.array) -> Tuple[np.array, float, bool, bool, dict]:
         """
@@ -69,8 +66,7 @@ class DynamicAMM(Env):
         for mc in traders_to_process:
             trader = self.traders[mc]
             action, _states = trader.predict(trader_obs)
-            swap_rate = self.swap_rates[action[0]] * 0.1
-            urgent_level = self.amm.fee_rates[action[1]]
+            swap_rate, urgent_level = action
             trader_actions.append((urgent_level, swap_rate, mc))
             
         # Sort by urgent level and get the highest urgency level trader
@@ -89,12 +85,6 @@ class DynamicAMM(Env):
                     self.total_pnl[mc] += pnl
                     self.total_fee[mc] += fees
                     reward += fees
-                # info = self.amm.swap(swap_rate)
-                # pnl, fees = self.calculate_pnl(info, swap_rate)
-                # if pnl > 0:
-                #     self.total_pnl[mc] += pnl
-                #     self.total_fee[mc] += fees
-                #     reward += fees
             else:
                 # If the highest urgency level is not higher than the fee rate, stop processing
                 break

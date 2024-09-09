@@ -22,9 +22,9 @@ from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
 
 def train(root_path):
     
-    TOTAL_STEPS = int(1e7)
-    EVALUATE_PER_STEP = int(1e3)
-    CHECKPOINT_PER_STEP = int(1e4)
+    TOTAL_STEPS = int(1e6)
+    EVALUATE_PER_STEP = int(1e2)
+    CHECKPOINT_PER_STEP = int(1e3)
     
     for mc in np.arange(0.05, 1.05, 0.05):
         mc = round(mc, 2)
@@ -47,7 +47,7 @@ def train(root_path):
                                      best_model_save_path=model_dirs,
                                      log_path=log_path,
                                      eval_freq=EVALUATE_PER_STEP,
-                                     n_eval_episodes=256,
+                                     n_eval_episodes=n_envs,
                                      deterministic=True,
                                      render=False)
         model.learn(total_timesteps=TOTAL_STEPS, callback=[checkpoint_callback, eval_callback, wandb_callback], progress_bar=True)
