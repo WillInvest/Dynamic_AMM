@@ -1,6 +1,7 @@
 import os
 import sys
 import socket
+import gc
 
 # Get the path to the AMM-Python directory
 sys.path.append(f'{os.path.expanduser("~")}/AMM-Python')
@@ -26,7 +27,7 @@ def train(root_path):
     EVALUATE_PER_STEP = int(1e2)
     CHECKPOINT_PER_STEP = int(1e3)
     
-    for mc in np.arange(0.05, 1.05, 0.05):
+    for mc in np.arange(0.35, 1.05, 0.05):
         mc = round(mc, 2)
         wandb.init(project="Dynamic_AMM_Trader",
                    entity='willinvest',
@@ -35,7 +36,7 @@ def train(root_path):
         model_dirs = os.path.join(root_path, "trader_model", f"market_competition_level_{mc:.2f}")
         log_path = os.path.join(model_dirs, "logs")
         os.makedirs(model_dirs, exist_ok=True)
-        n_envs = 16
+        n_envs = 32
         envs = [lambda: Monitor(MultiAgentAmm(market=MarketSimulator(seed=seed, steps=5000),
                                               amm=AMM(),
                                               market_competition_level=mc)) for seed in range(n_envs)]
@@ -52,6 +53,7 @@ def train(root_path):
                                      render=False)
         model.learn(total_timesteps=TOTAL_STEPS, callback=[checkpoint_callback, eval_callback, wandb_callback], progress_bar=True)
         wandb.finish()
+        gc.collect()
 
 if __name__ == '__main__':
     ROOT_DIR = f'{os.path.expanduser("~")}/AMM-Python/models'
