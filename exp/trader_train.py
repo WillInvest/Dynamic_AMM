@@ -27,7 +27,7 @@ def train(root_path):
     EVALUATE_PER_STEP = int(1e2)
     CHECKPOINT_PER_STEP = int(1e3)
     
-    for mc in np.arange(0.35, 1.05, 0.05):
+    for mc in np.arange(0.05, 1.05, 0.05):
         mc = round(mc, 2)
         wandb.init(project="Dynamic_AMM_Trader",
                    entity='willinvest',
