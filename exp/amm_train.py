@@ -34,7 +34,6 @@ class WandbCallback(BaseCallback):
         total_pnl = self.locals['infos'][0]['total_pnl']
         total_fee = self.locals['infos'][0]['total_fee']
         actions = self.locals['actions'][0]
-        act = self.training_env.get_attr('current_action')[0]
         fee = self.training_env.get_attr('amm')[0].fee
         done = self.locals['dones'][0]
         urgent_levels = self.training_env.get_attr('urgent_levels')[0]
@@ -44,7 +43,6 @@ class WandbCallback(BaseCallback):
         # Prepare log data
         log_data = {
             "actions": actions,
-            "act": act,
             'fee_rate': fee,
             'reward': reward
         }
@@ -102,7 +100,7 @@ def train(root_path):
     env = SubprocVecEnv(envs)
     model = TD3("MlpPolicy", env, verbose=1, learning_rate=0.0003, train_freq=(1, 'step'), gradient_steps=-1)
         
-    checkpoint_callback = CheckpointCallback(save_freq=EVALUATE_PER_STEP, save_path=model_dirs, name_prefix="rl_maker")
+    checkpoint_callback = CheckpointCallback(save_freq=CHECKPOINT_PER_STEP, save_path=model_dirs, name_prefix="rl_maker")
     wandb_callback = WandbCallback()
     eval_callback = EvalCallback(env,
                                  best_model_save_path=model_dirs,

@@ -30,11 +30,8 @@ class DynamicAMM(Env):
         self.amm = amm
         self.market = market
         self.step_count = 0
-        self.fee_rate = None
         self.done = False
-        self.max_steps = 500
-        self.fee_scaler = 0.1
-        self.current_action = None
+        self.max_steps = 5000
         self.urgent_levels = []  # List to store urgent levels
         self.swap_rates = [np.round(rate, 2) for rate in np.arange(-1.0, 1.1, 0.1) if np.round(rate, 2) != 0]
         self.total_pnl = {mc: 0.0 for mc in self.traders.keys()}
@@ -56,9 +53,7 @@ class DynamicAMM(Env):
         # Initialize step pnl and fee
         reward = 0
         swap_rates = {mc: 0 for mc in self.traders.keys()}
-        self.current_action = action
-        self.fee_rate = round(self.amm.fee_rates[self.current_action], 4)
-        self.amm.fee = self.fee_rate
+        self.amm.fee = np.round(action[0], 4)
         traders_to_process = list(self.traders.keys())
         trader_obs = self.get_trader_obs()
         trader_actions = []
@@ -119,6 +114,7 @@ class DynamicAMM(Env):
         market_gain = (abs(asset_delta[asset_out])) * self.market.get_bid_price(asset_out)
         pnl = (market_gain - amm_cost) / self.market.initial_price if swap_rate != 0 else 0  
         fees = (fee['A'] + fee['B']) / self.market.initial_price
+        
         return pnl, fees
 
     def reset(self, seed=None):
@@ -153,9 +149,9 @@ class DynamicAMM(Env):
         return np.array([
             self.market.get_ask_price('A') / self.market.get_bid_price('B'),
             self.market.get_bid_price('A') / self.market.get_ask_price('B'),
-            (self.amm.reserve_b / self.amm.reserve_a) * (1+self.fee_rate),
-            (self.amm.reserve_b / self.amm.reserve_a) / (1+self.fee_rate),
-            self.fee_rate
+            (self.amm.reserve_b / self.amm.reserve_a) * (1+self.amm.fee),
+            (self.amm.reserve_b / self.amm.reserve_a) / (1+self.amm.fee),
+            self.amm.fee
             ], dtype=np.float32)
  
     def render(self, mode='human'):
