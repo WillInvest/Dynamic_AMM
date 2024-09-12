@@ -34,7 +34,6 @@ class WandbCallback(BaseCallback):
         total_pnl = self.locals['infos'][0]['total_pnl']
         total_fee = self.locals['infos'][0]['total_fee']
         actions = self.locals['actions'][0]
-        fee = self.training_env.get_attr('amm')[0].fee
         done = self.locals['dones'][0]
         urgent_levels = self.training_env.get_attr('urgent_levels')[0]
         swap_rates = self.locals['infos'][0]['swap_rates']
@@ -43,7 +42,6 @@ class WandbCallback(BaseCallback):
         # Prepare log data
         log_data = {
             "actions": actions,
-            'fee_rate': fee,
             'reward': reward
         }
         
@@ -83,7 +81,7 @@ class WandbCallback(BaseCallback):
 def train(root_path):
     
     TOTAL_STEPS = int(1e7)
-    EVALUATE_PER_STEP = int(1e2)
+    EVALUATE_PER_STEP = int(1e4)
     CHECKPOINT_PER_STEP = int(1e3)
     model_dirs = os.path.join(root_path, "maker_model")
     os.makedirs(model_dirs, exist_ok=True)
