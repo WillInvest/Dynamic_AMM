@@ -32,7 +32,6 @@ class DynamicAMM(Env):
         self.step_count = 0
         self.done = False
         self.max_steps = 5000
-        self.urgent_levels = []  # List to store urgent levels
         self.swap_rates = [np.round(rate, 2) for rate in np.arange(-1.0, 1.1, 0.1) if np.round(rate, 2) != 0]
         self.total_pnl = {mc: 0.0 for mc in self.traders.keys()}
         self.total_fee = {mc: 0.0 for mc in self.traders.keys()}
@@ -52,6 +51,7 @@ class DynamicAMM(Env):
         """
         # Initialize step pnl and fee
         reward = 0
+        urgent_levels = {mc: 0 for mc in self.traders.keys()}
         swap_rates = {mc: 0 for mc in self.traders.keys()}
         self.amm.fee = np.round(action[0], 4)
         traders_to_process = list(self.traders.keys())
@@ -68,9 +68,10 @@ class DynamicAMM(Env):
         trader_actions.sort(reverse=True, key=get_urgent_level)
         for action in trader_actions:
             urgent_level, swap_rate, mc = action
+            swap_rates[mc] = swap_rate
+            urgent_levels[mc] = urgent_level
             if urgent_level >= self.amm.fee:
                 # TODO: create a fake AMM to test whether the swap will generate positive PnL
-                swap_rates[mc] = swap_rate
                 # check profit availability by simulating the swap; if positive, there is remaining arbitrage, then execute the swap
                 simu_info = self.amm.simu_swap(swap_rate)
                 simu_pnl, simu_fees = self.calculate_pnl(simu_info, swap_rate)
@@ -89,7 +90,8 @@ class DynamicAMM(Env):
             "cumulative_pnl": sum(self.total_pnl.values()),
             "total_pnl": self.total_pnl,
             "total_fee": self.total_fee,
-            "swap_rates": swap_rates
+            "swap_rates": swap_rates,
+            "urgent_levels": urgent_levels
             }
 
         # increase the step count

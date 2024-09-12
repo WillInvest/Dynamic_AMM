@@ -35,8 +35,8 @@ class WandbCallback(BaseCallback):
         total_fee = self.locals['infos'][0]['total_fee']
         actions = self.locals['actions'][0]
         done = self.locals['dones'][0]
-        urgent_levels = self.training_env.get_attr('urgent_levels')[0]
         swap_rates = self.locals['infos'][0]['swap_rates']
+        urgent_levels = self.locals['infos'][0]['urgent_levels']
         reward = self.locals['rewards'][0]
 
         # Prepare log data
@@ -81,8 +81,8 @@ class WandbCallback(BaseCallback):
 def train(root_path):
     
     TOTAL_STEPS = int(1e7)
-    EVALUATE_PER_STEP = int(1e4)
-    CHECKPOINT_PER_STEP = int(1e3)
+    EVALUATE_PER_STEP = int(1e2)
+    CHECKPOINT_PER_STEP = int(5e3)
     model_dirs = os.path.join(root_path, "maker_model")
     os.makedirs(model_dirs, exist_ok=True)
     trader_dirs = os.path.join(root_path, "trader_model")
@@ -104,11 +104,11 @@ def train(root_path):
                                  best_model_save_path=model_dirs,
                                  log_path=model_dirs,
                                  eval_freq=EVALUATE_PER_STEP,
-                                 n_eval_episodes=n_envs,
+                                 n_eval_episodes=1,
                                  deterministic=True,
                                  render=False)
         
-    model.learn(total_timesteps=TOTAL_STEPS, callback=[checkpoint_callback, eval_callback, wandb_callback], progress_bar=True)
+    model.learn(total_timesteps=TOTAL_STEPS, callback=[checkpoint_callback, wandb_callback], progress_bar=True)
 
     wandb.finish()
 
