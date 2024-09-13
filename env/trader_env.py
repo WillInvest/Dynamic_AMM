@@ -41,7 +41,7 @@ class MultiAgentAmm(Env):
         self.observation_space = spaces.Box(low=np.array([0., 0., 0., 0., 0.], dtype=np.float32),
                                             high=np.array([np.inf, np.inf, np.inf, np.inf, np.inf], dtype=np.float32))
         # action space
-        self.action_space = spaces.Box(low=np.array([-0.05, 0.0]), high=np.array([0.05, 1.0]), shape=(2,), dtype=np.float32)
+        self.action_space = spaces.Box(low=np.array([-0.05, 0.0005]), high=np.array([0.05, 0.005]), shape=(2,), dtype=np.float32)
     
     def get_rule_base_action(self):
         obs = self.get_obs()
@@ -122,13 +122,14 @@ class MultiAgentAmm(Env):
 
         # urgent_level is greater than the fee rate, which means the agent can accept current fee rate
         if self.urgent_level >= self.amm.fee:
-                asset_in1, asset_out1 = determine_assets(self.swap_rate1)
-                rew1, fee1 = self.execute_trade(self.swap_rate1, asset_in1, asset_out1)
-                rew1 = rew1 * (1-self.urgent_level) if rew1 > 0 else rew1
-                
-                self.swap_rate2 = self.get_rule_base_action()
-                asset_in2, asset_out2 = determine_assets(self.swap_rate2)
-                rew2, fee2 = self.execute_trade(self.swap_rate2, asset_in2, asset_out2)
+            asset_in1, asset_out1 = determine_assets(self.swap_rate1)
+            rew1, fee1 = self.execute_trade(self.swap_rate1, asset_in1, asset_out1)
+            gas_pct = (self.urgent_level - 0.0005) / (0.005 - 0.0005)
+            rew1 = rew1 * (1-gas_pct) if rew1 > 0 else rew1
+            
+            self.swap_rate2 = self.get_rule_base_action()
+            asset_in2, asset_out2 = determine_assets(self.swap_rate2)
+            rew2, fee2 = self.execute_trade(self.swap_rate2, asset_in2, asset_out2)
         else:
             self.swap_rate2 = self.get_rule_base_action()
             asset_in2, asset_out2 = determine_assets(self.swap_rate2)
