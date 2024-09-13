@@ -4,6 +4,7 @@ import wandb
 import argparse
 import sys  
 import socket
+import numpy as np
 # Get the path to the AMM-Python directory
 sys.path.append(f'{os.path.expanduser("~")}/AMM-Python')
 # env related
@@ -17,7 +18,7 @@ from stable_baselines3.common.vec_env import SubprocVecEnv
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.callbacks import CheckpointCallback, EvalCallback
 from stable_baselines3.common.callbacks import BaseCallback
-
+from stable_baselines3.common.noise import NormalActionNoise
 class WandbCallback(BaseCallback):
     def __init__(self, log_name='trade_log.csv', verbose=0):
         super(WandbCallback, self).__init__(verbose)
@@ -96,7 +97,10 @@ def train(root_path):
                                             amm=AMM(),
                                             trader_dir=trader_dirs)) for seed in range(n_envs)]
     env = SubprocVecEnv(envs)
-    model = TD3("MlpPolicy", env, verbose=1, learning_rate=0.0003, train_freq=(1, 'step'), gradient_steps=-1)
+    n_actions = env.action_space.shape[-1]
+    action_noise = NormalActionNoise(mean=np.zeros(n_actions), sigma=0.1 * np.ones(n_actions))
+
+    model = TD3("MlpPolicy", env, verbose=1, learning_rate=0.0003, train_freq=(1, 'step'), gradient_steps=-1, action_noise=action_noise)
         
     checkpoint_callback = CheckpointCallback(save_freq=CHECKPOINT_PER_STEP, save_path=model_dirs, name_prefix="rl_maker")
     wandb_callback = WandbCallback()
