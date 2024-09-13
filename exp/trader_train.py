@@ -46,7 +46,7 @@ def train(root_path):
         n_actions = env.action_space.shape[-1]
         exploration_noise = NormalActionNoise(mean=np.zeros(n_actions), sigma=1.0 * np.ones(n_actions))
 
-        model = TD3("MlpPolicy", env, verbose=0, learning_rate=0.0003, train_freq=(n_envs*100, 'step'), gradient_steps=-1, action_noise=exploration_noise)
+        model = TD3("MlpPolicy", env, verbose=0, learning_rate=0.0003, train_freq=(n_envs*10000, 'step'), gradient_steps=-1, action_noise=exploration_noise)
         checkpoint_callback = CheckpointCallback(save_freq=CHECKPOINT_PER_STEP, save_path=model_dirs, name_prefix="rl_trader")
         wandb_callback = TraderWandbCallback()
         eval_callback = EvalCallback(env,
