@@ -25,9 +25,9 @@ from stable_baselines3.common.noise import NormalActionNoise
 
 def train(root_path):
     n_envs = 16
-    TOTAL_STEPS = n_envs * int(1e7)
+    TOTAL_STEPS = n_envs * int(1e6)
     EVALUATE_PER_STEP = TOTAL_STEPS / 10
-    CHECKPOINT_PER_STEP = int(1e5)
+    CHECKPOINT_PER_STEP = int(1e4)
     
     for mc in np.arange(0.05, 1.05, 0.05):
         mc = round(mc, 2)
