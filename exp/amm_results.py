@@ -6,7 +6,7 @@ from tqdm import tqdm
 import pandas as pd
 from typing import Dict, List
 import numpy as np
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO, TD3
 import time
 from datetime import datetime
 from amm_simulate import *
@@ -21,10 +21,10 @@ def main(trader_dir, maker_dir, iterations=300, verbose=False):
     
     # Load the trained traders
     traders = {}
-    for mc in np.arange(0.02, 0.22, 0.02):
-        model_path = os.path.join(trader_dir, f'market_competition_level_{mc:.2f}', 'rl_trader_5000000_steps.zip')
+    for mc in np.arange(0.05, 1.05, 0.05):
+        model_path = os.path.join(trader_dir, f'market_competition_level_{mc:.2f}', 'best_model.zip')
         if os.path.exists(model_path):
-            traders[mc] = PPO.load(model_path)
+            traders[mc] = TD3.load(model_path)
             print(f"Loaded model for market competition_level {mc:.2f}")
 
     # define the fee rates
@@ -155,5 +155,5 @@ def main(trader_dir, maker_dir, iterations=300, verbose=False):
     
 if __name__ == "__main__":
     trader_dir = f'{os.path.expanduser("~")}/AMM-Python/models/trader_model'
-    maker_dir = f'{os.path.expanduser("~")}/AMM-Python/models/maker_model/rl_maker_5000000_steps.zip'
-    main(trader_dir, maker_dir, iterations=30)
+    maker_dir = f'{os.path.expanduser("~")}/AMM-Python/models/maker_model/best_model.zip'
+    main(trader_dir, maker_dir, iterations=2)

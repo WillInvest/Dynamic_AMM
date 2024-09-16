@@ -19,7 +19,7 @@ from stable_baselines3.common.vec_env import SubprocVecEnv
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.noise import NormalActionNoise
 
-def train(root_path):
+def train(root_path, model_idx=None):
     n_envs = 16
     TOTAL_STEPS = n_envs * int(1e6)
     EVALUATE_PER_STEP = int(1e3)
@@ -39,7 +39,11 @@ def train(root_path):
     # Define action noise
     n_actions = env.action_space.shape[-1]
     exploration_noise = NormalActionNoise(mean=np.zeros(n_actions), sigma=1.0 * np.ones(n_actions))
-    model = TD3("MlpPolicy", env, verbose=0, learning_rate=0.0003, train_freq=(n_envs*100, 'step'), gradient_steps=-1, action_noise=exploration_noise)
+    if model_idx is None:
+        model = TD3("MlpPolicy", env, verbose=0, learning_rate=0.0003, train_freq=(n_envs*100, 'step'), gradient_steps=-1, action_noise=exploration_noise)
+    else:
+        model_path = f'/home/shiftpub/AMM-Python/models/maker_model/rl_maker_{model_idx}_steps.zip'
+        model = TD3.load(path=model_path, env=env)
     checkpoint_callback = CheckpointCallback(save_freq=CHECKPOINT_PER_STEP, save_path=model_dirs, name_prefix="rl_maker")
     wandb_callback = MakerWandbCallback()
     eval_callback = EvalCallback(env,

@@ -3,6 +3,7 @@ from env.new_amm import AMM
 from typing import Dict, List
 import numpy as np
 from stable_baselines3 import PPO
+from tqdm import tqdm
 
 swap_rates = [np.round(rate, 2) for rate in np.arange(-1.0, 1.1, 0.1) if np.round(rate, 2) != 0]
 
@@ -53,7 +54,8 @@ def simulate_with_constant_fee_rate(traders, fee_rate, seed, sigma) -> dict:
     traders_to_process = list(traders.keys())
 
     # get the trader observation
-    while market_steps < market.steps and min(amm.reserve_a, amm.reserve_b) > amm.initial_shares * 0.2:
+    for _ in tqdm(range(market.steps), desc=f'fee_rate:{fee_rate}, sigma_{sigma}'):
+    # while market_steps < market.steps and min(amm.reserve_a, amm.reserve_b) > amm.initial_shares * 0.2:
 
         trader_obs = get_trader_obs(market=market, amm=amm)
         trader_actions = []
@@ -61,8 +63,7 @@ def simulate_with_constant_fee_rate(traders, fee_rate, seed, sigma) -> dict:
         for mc in traders_to_process:
             trader = traders[mc]
             action, _states = trader.predict(trader_obs)
-            swap_rate = swap_rates[action[0]] * 0.1
-            urgent_level = round(amm.fee_rates[action[1]], 4)
+            swap_rate, urgent_level = action
             trader_actions.append((urgent_level, swap_rate, mc))
 
         # Sort by urgent level and get the highest urgency level trader
@@ -82,22 +83,7 @@ def simulate_with_constant_fee_rate(traders, fee_rate, seed, sigma) -> dict:
                     total_fee[mc] += fees
                     total_volume[mc] += 1
                     total_transactions[mc] += (amm_cost + market_gain)
-                
-                # info = amm.swap(swap_rate)
-                # if swap_rate < 0:
-                #     asset_in, asset_out = 'A', 'B'
-                # else:
-                #     asset_in, asset_out = 'B', 'A'
-                # asset_delta = info['asset_delta']
-                # fee = info['fee']
-                # amm_cost = (asset_delta[asset_in] + fee[asset_in]) * market.get_ask_price(asset_in)
-                # market_gain = (abs(asset_delta[asset_out])) * market.get_bid_price(asset_out)
-                # pnl = (market_gain - amm_cost)/market.initial_price if swap_rate != 0 else 0    
-                # if pnl > 0:
-                #     total_pnl[mc] += pnl
-                #     total_fee[mc] += (fee['A'] + fee['B'])
-                #     total_volume[mc] += 1
-                #     total_transactions[mc] += (amm_cost + market_gain)
+     
             else:
                 # If the highest urgency level is not higher than the fee rate, stop processing
                 break
@@ -107,8 +93,10 @@ def simulate_with_constant_fee_rate(traders, fee_rate, seed, sigma) -> dict:
         price_distance += abs(market_mid - amm_mid)
                 
         # Update the state of the market and AMM after the trade
+        if min(amm.reserve_a, amm.reserve_b) < amm.initial_shares * 0.2:
+            break
         market.next()
-        market_steps += 1
+        # market_steps += 1
             
     return total_pnl, total_fee, total_volume, price_distance, total_transactions
 
@@ -139,18 +127,15 @@ def simulate_with_rl_amm(traders, seed, maker_dir, sigma) -> Dict[float, List[fl
             ], dtype=np.float32)
 
         action, _ = amm_agent.predict(obs)
-        amm.fee = amm.fee_rates[action]
+        amm.fee = np.round(action[0], 4)
         dynamic_fees.append(amm.fee)
-        trader_obs = get_trader_obs(market=market, amm=amm)
-        
         trader_obs = get_trader_obs(market=market, amm=amm)
         trader_actions = []
             
         for mc in traders_to_process:
             trader = traders[mc]
             action, _states = trader.predict(trader_obs)
-            swap_rate = swap_rates[action[0]] * 0.1
-            urgent_level = round(amm.fee_rates[action[1]], 4)
+            swap_rate, urgent_level = action
             trader_actions.append((urgent_level, swap_rate, mc))
             
         # Sort by urgent level and get the highest urgency level trader
@@ -169,22 +154,6 @@ def simulate_with_rl_amm(traders, seed, maker_dir, sigma) -> Dict[float, List[fl
                     total_fee[mc] += fees
                     total_volume[mc] += 1
                     total_transactions[mc] += (amm_cost + market_gain)
-                
-                # info = amm.swap(swap_rate)
-                # if swap_rate < 0:
-                #     asset_in, asset_out = 'A', 'B'
-                # else:
-                #     asset_in, asset_out = 'B', 'A'
-                # asset_delta = info['asset_delta']
-                # fee = info['fee']
-                # amm_cost = (asset_delta[asset_in] + fee[asset_in]) * market.get_ask_price(asset_in)
-                # market_gain = (abs(asset_delta[asset_out])) * market.get_bid_price(asset_out)
-                # pnl = (market_gain - amm_cost)/market.initial_price if swap_rate != 0 else 0   
-                # if pnl > 0: 
-                #     total_pnl[mc] += pnl
-                #     total_fee[mc] += (fee['A'] + fee['B'])
-                #     total_volume[mc] += 1
-                #     total_transactions[mc] += (amm_cost + market_gain)
             else:
                 # If the highest urgency level is not higher than the fee rate, stop processing
                 break

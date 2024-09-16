@@ -61,7 +61,6 @@ class DynamicAMM(Env):
         for mc in traders_to_process:
             trader = self.traders[mc]
             action, _states = trader.predict(trader_obs)
-            print(f"Trader {mc:.2f} action: {action}")
             swap_rate, urgent_level = action
             trader_actions.append((urgent_level, swap_rate, mc))
             
