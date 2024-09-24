@@ -12,6 +12,8 @@ from datetime import datetime
 from amm_simulate import *
 from amm_plot import *
 from datetime import datetime
+
+time_stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
 def main(trader_dir, maker_dir, iterations=300, verbose=False):
 
@@ -49,7 +51,7 @@ def main(trader_dir, maker_dir, iterations=300, verbose=False):
         for fee_rate in total_pnls_constant.keys():
             for seed in tqdm(range(iterations), desc=f'Sigma {sigma}, Fee Rate {fee_rate}'):
                 seed = seed + int(time.time())
-                total_pnl, total_fee, total_vol, price_distance, total_transaction = simulate_with_constant_fee_rate(traders, fee_rate, seed, sigma=sigma)
+                total_pnl, total_fee, total_vol, price_distance, total_transaction, trader_transaction = simulate_with_constant_fee_rate(traders, fee_rate, seed, sigma=sigma)
                 total_pnl_sum = sum(total_pnl.values())  # Sum the PnL of all traders
                 total_fee_sum = sum(total_fee.values())  # Sum the fee of all traders
                 total_vol_sum = sum(total_vol.values())  # Sum the volume of all traders
@@ -59,6 +61,33 @@ def main(trader_dir, maker_dir, iterations=300, verbose=False):
                 total_vols_constant[fee_rate].append(total_vol_sum)
                 total_price_distance_constant[fee_rate].append(price_distance)
                 total_transactions_constant[fee_rate].append(total_transaction_sum)
+
+                # Save intermediate trader_transaction to CSV
+                trader_transaction_df = pd.DataFrame(trader_transaction)
+                trader_transaction_csv_path = os.path.join(results_dir, f"intermediate_results_{time_stamp}", f"sigma_{sigma}", f"fee_{fee_rate}", 
+                                                           f'trader_transactions_sigma_{sigma}_fee_{fee_rate}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv')
+                os.makedirs(os.path.dirname(trader_transaction_csv_path), exist_ok=True)
+                trader_transaction_df.to_csv(trader_transaction_csv_path, index=False)
+                
+                # Save intermediate results for this fee rate and sigma
+                intermediate_results = pd.DataFrame({
+                    'sigma': [sigma],
+                    'fee_rate': [fee_rate],
+                    'pnl': [total_pnl_sum],
+                    'fee': [total_fee_sum],
+                    'volume': [total_vol_sum],
+                    'price_distance': [price_distance],
+                    'total_transactions': [total_transaction_sum]
+                })
+                csv_file_path = os.path.join(results_dir, f"intermediate_results_{time_stamp}", f"sigma_{sigma}", f"fee_{fee_rate}", 
+                                             f'intermediate_results_sigma_{sigma}_fee_{fee_rate}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv')
+                os.makedirs(os.path.dirname(csv_file_path), exist_ok=True)
+                # Append to the file if it exists, otherwise create a new one
+                if os.path.exists(csv_file_path):
+                    intermediate_results.to_csv(csv_file_path, mode='a', header=False, index=False)
+                else:
+                    intermediate_results.to_csv(csv_file_path, index=False)
+
                 if verbose:
                     print(f"Sigma {sigma}, Seed {seed}: Total PnL for fee rate {fee_rate}: {total_pnl_sum}")
                     print(f"Sigma {sigma}, Seed {seed}: Total Fee for fee rate {fee_rate}: {total_fee_sum}")
@@ -77,7 +106,7 @@ def main(trader_dir, maker_dir, iterations=300, verbose=False):
         # Collect results for RL agent
         for seed in tqdm(range(iterations), desc=f'Sigma {sigma}, RL Agent'):
             seed = seed + int(time.time())
-            total_pnl, total_fee, total_vol, dynamic_fees, price_distance, total_transaction = simulate_with_rl_amm(traders, seed, maker_dir, sigma=sigma)
+            total_pnl, total_fee, total_vol, dynamic_fees, price_distance, total_transaction, trader_transaction = simulate_with_rl_amm(traders, seed, maker_dir, sigma=sigma)
             total_pnl_sum = sum(total_pnl.values())  # Sum the PnL of all traders
             total_fee_sum = sum(total_fee.values())  # Sum the fee of all traders
             total_vol_sum = sum(total_vol.values())  # Sum the volume of all traders
@@ -88,6 +117,35 @@ def main(trader_dir, maker_dir, iterations=300, verbose=False):
             total_dynamic_fee.extend(dynamic_fees)
             total_price_distance_rl.append(price_distance)
             total_transactions_rl.append(total_transaction_sum)
+            
+            # Save intermediate trader_transaction for RL agent to CSV
+            trader_transaction_df_rl = pd.DataFrame(trader_transaction)
+            trader_transaction_csv_path_rl = os.path.join(results_dir, f"intermediate_results_{time_stamp}", f"sigma_{sigma}", f"fee_rl", 
+                                                          f'trader_transactions_sigma_{sigma}_fee_rl_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv')
+            os.makedirs(os.path.dirname(trader_transaction_csv_path_rl), exist_ok=True)
+            trader_transaction_df_rl.to_csv(trader_transaction_csv_path_rl, index=False)
+
+            # Save intermediate results for RL agent
+            intermediate_results_rl = pd.DataFrame({
+                'sigma': [sigma],
+                'fee_rate': ['rl'],
+                'pnl': [total_pnl_sum],
+                'fee': [total_fee_sum],
+                'volume': [total_vol_sum],
+                'price_distance': [price_distance],
+                'dynamic_fee': [np.mean(dynamic_fees)],
+                'total_transactions': [total_transaction_sum]
+            })
+            csv_file_path_rl = os.path.join(results_dir, f"intermediate_results_{time_stamp}", f"sigma_{sigma}", f"fee_rl", 
+                                                      f'intermediate_results_sigma_{sigma}_fee_rl_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv')
+            os.makedirs(os.path.dirname(csv_file_path_rl), exist_ok=True)
+            
+            # Append to the file if it exists, otherwise create a new one
+            if os.path.exists(csv_file_path_rl):
+                intermediate_results_rl.to_csv(csv_file_path_rl, mode='a', header=False, index=False)
+            else:
+                intermediate_results_rl.to_csv(csv_file_path_rl, index=False)
+
             if verbose:
                 print(f"Sigma {sigma}, Seed {seed}: Total PnL for RL: {total_pnl_sum}")
                 print(f"Sigma {sigma}, Seed {seed}: Total Fee for RL: {total_fee_sum}")
@@ -114,7 +172,7 @@ def main(trader_dir, maker_dir, iterations=300, verbose=False):
                 'total_transactions_rl': total_transactions_rl
             }
         }
-    
+
     # Flatten results and save to CSV
     flattened_results = []
 
@@ -156,4 +214,4 @@ def main(trader_dir, maker_dir, iterations=300, verbose=False):
 if __name__ == "__main__":
     trader_dir = f'{os.path.expanduser("~")}/AMM-Python/models/trader_model'
     maker_dir = f'{os.path.expanduser("~")}/AMM-Python/models/maker_model/best_model.zip'
-    main(trader_dir, maker_dir, iterations=2)
+    main(trader_dir, maker_dir, iterations=30)
