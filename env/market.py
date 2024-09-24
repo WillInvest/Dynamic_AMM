@@ -17,7 +17,7 @@ class MarketSimulator:
                  start_price=50000,
                  mu=0.0001,
                  sigma=None,
-                 dt=1,
+                 dt=1/60,
                  deterministic=False,
                  steps=5000,
                  seed=0):
