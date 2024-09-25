@@ -56,6 +56,7 @@ class DynamicAMM(Env):
         self.amm.fee = np.round(action[0], 4)
         traders_to_process = list(self.traders.keys())
         trader_obs = self.get_trader_obs()
+        print(f"trader_obs: {trader_obs}")
         trader_actions = []
             
         for mc in traders_to_process:
@@ -70,6 +71,7 @@ class DynamicAMM(Env):
             urgent_level, swap_rate, mc = action
             swap_rates[mc] = swap_rate
             urgent_levels[mc] = urgent_level
+            print(f"urgent_lvl:{urgent_level} | swap_rate:{swap_rate}")
             if urgent_level >= self.amm.fee:
                 # TODO: create a fake AMM to test whether the swap will generate positive PnL
                 # check profit availability by simulating the swap; if positive, there is remaining arbitrage, then execute the swap

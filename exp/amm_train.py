@@ -10,7 +10,8 @@ sys.path.append(f'{os.path.expanduser("~")}/AMM-Python')
 # env related
 from env.market import MarketSimulator
 from env.new_amm import AMM
-from env.amm_env import DynamicAMM
+# from env.amm_env import DynamicAMM
+from env.dummy_AMM import DummyAMM
 from callbacks import EvalCallback, CheckpointCallback, NoiseCallback, MakerWandbCallback
     
 # stable baseline related
@@ -20,21 +21,20 @@ from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.noise import NormalActionNoise
 
 def train(root_path, model_idx=None):
-    n_envs = 16
+    n_envs = 32
     TOTAL_STEPS = n_envs * int(1e6)
     EVALUATE_PER_STEP = int(1e3)
     CHECKPOINT_PER_STEP = int(1e3)
-    model_dirs = os.path.join(root_path, "maker_model")
+    model_dirs = os.path.join(root_path, "dummy_maker_model")
     os.makedirs(model_dirs, exist_ok=True)
-    trader_dirs = os.path.join(root_path, "trader_model")
+    # trader_dirs = os.path.join(root_path, "trader_model")
 
     wandb.init(project=f"Dynamic_AMM_Maker",
                entity='willinvest',
-               name=f'User-{socket.gethostname()}')
+               name=f'User-{socket.gethostname()}_Dummy')
     
-    envs = [lambda: Monitor(DynamicAMM(market=MarketSimulator(),
-                                            amm=AMM(),
-                                            trader_dir=trader_dirs)) for seed in range(n_envs)]
+    envs = [lambda: Monitor(DummyAMM(market=MarketSimulator(),
+                                            amm=AMM())) for seed in range(n_envs)]
     env = SubprocVecEnv(envs)
     # Define action noise
     n_actions = env.action_space.shape[-1]
