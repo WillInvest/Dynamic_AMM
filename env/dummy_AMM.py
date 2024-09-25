@@ -73,9 +73,11 @@ class DummyAMM(Env):
         asset_in, asset_out = ('A', 'B') if swap_rate < 0 else ('B', 'A')
         amm_cost = (asset_delta[asset_in] + fee[asset_in]) * self.market.get_ask_price(asset_in)
         market_gain = (abs(asset_delta[asset_out])) * self.market.get_bid_price(asset_out)
-        reward = (market_gain - amm_cost) / self.market.initial_price if swap_rate != 0 else 0
-        self.cumulative_fee += reward
-        self.cumulative_pnl += (market_gain - amm_cost)
+        pnl = (market_gain - amm_cost) / self.market.initial_price if swap_rate != 0 else 0
+        fee = (fee['A'] + fee['B']) / self.market.initial_price
+        self.cumulative_fee += fee
+        self.cumulative_pnl += pnl
+        reward = fee
         
         info = {
             'cumulative_fee' : self.cumulative_fee,
