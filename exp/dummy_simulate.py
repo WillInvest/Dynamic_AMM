@@ -47,6 +47,8 @@ def simulate_with_constant_fee_rate(fee_rate, seed, sigma) -> dict:
         market_mid = market.AP / market.BP
         amm_mid = amm.reserve_b / amm.reserve_a
         price_distance += abs(market_mid - amm_mid)
+        total_volume += 1
+        total_transactions += (market_gain + amm_cost) / market.initial_price
 
         # Update the state of the market and AMM after the trade
         if min(amm.reserve_a, amm.reserve_b) < amm.initial_shares * 0.2:
