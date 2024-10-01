@@ -27,12 +27,12 @@ def main(maker_dir, iterations, config):
     os.makedirs(results_dir, exist_ok=True)
 
     # Define the fee rates
-    max_fee_rate = 0.02
+    max_fee_rate = 0.0205
     min_fee_rate = 0.0005
     fee_rates = np.round(np.arange(min_fee_rate, max_fee_rate, min_fee_rate), 4)
     
     # Define sigma values
-    sigma_values = [0.005, 0.006, 0.007, 0.008, 0.009, 0.01]
+    sigma_values = [0.001, 0.005, 0.01, 0.05, 0.1, 0.5]
     results = {}
 
     # Start parallel processing using ProcessPoolExecutor
@@ -114,4 +114,4 @@ if __name__ == "__main__":
         'steps' : steps
     }
     maker_dir = f'{os.path.expanduser("~")}/AMM-Python/models/dummy_maker_model/rl_maker_17312000_steps.zip'
-    main(maker_dir, iterations=50, config=config)
+    main(maker_dir, iterations=3000, config=config)
