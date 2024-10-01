@@ -24,9 +24,7 @@ def main(maker_dir, iterations, config):
     # define the fee rates
     max_fee_rate = 0.2
     min_fee_rate = 0.0005
-    num_slices = 10
     fee_rates = np.round(np.arange(min_fee_rate, max_fee_rate, min_fee_rate), 4)
-    fee_rates = np.linspace(min_fee_rate, max_fee_rate, num_slices)
     
     # Define sigma values
     sigma_values = [0.005, 0.006, 0.007, 0.008, 0.009, 0.01]
@@ -132,21 +130,18 @@ def main(maker_dir, iterations, config):
     
 if __name__ == "__main__":
     
+    dt = 1/3600
+    mu = 0.0001
+    start_price = 50000
+    steps = 5000
+    spread = 0.01
     
-    dts = [1/3600, 1/36000]
-    
-    for dt in dts:
-        mu = 0.0001
-        start_price = 50000
-        steps = 50000
-        spread = 0.01
-        
-        config = {
-            'mu' : mu, 
-            'spread' : spread,
-            'dt' : dt,
-            'start_price' : start_price,
-            'steps' : steps
-        }
-        maker_dir = f'{os.path.expanduser("~")}/AMM-Python/models/dummy_maker_model/rl_maker_17312000_steps.zip'
-        main(maker_dir, iterations=50, config=config)
+    config = {
+        'mu' : mu, 
+        'spread' : spread,
+        'dt' : dt,
+        'start_price' : start_price,
+        'steps' : steps
+    }
+    maker_dir = f'{os.path.expanduser("~")}/AMM-Python/models/dummy_maker_model/rl_maker_17312000_steps.zip'
+    main(maker_dir, iterations=50, config=config)
