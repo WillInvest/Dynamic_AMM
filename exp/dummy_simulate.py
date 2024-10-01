@@ -6,13 +6,19 @@ from stable_baselines3 import PPO, TD3
 from tqdm import tqdm
 import math
 
-def simulate_with_constant_fee_rate(fee_rate, seed, sigma) -> dict:
+def simulate_with_constant_fee_rate(fee_rate, seed, sigma, config) -> dict:
     """
     urgent level determines whether the agent places an order or not.
     market competence determines how much percent of arbitrage opportunities will be taken by other traders in the market.
     """
     amm = AMM(fee=fee_rate)
-    market = MarketSimulator(seed=seed, sigma=sigma)
+    market = MarketSimulator(seed=seed,
+                             sigma=sigma,
+                             mu=config['mu'],
+                             spread=config['spread'],
+                             dt=config['dt'],
+                             start_price=config['start_price'],
+                             steps=config['steps'])
 
     price_distance = 0
     total_pnl = 0
@@ -21,7 +27,7 @@ def simulate_with_constant_fee_rate(fee_rate, seed, sigma) -> dict:
     total_transactions = 0
 
     # Loop over market steps
-    for _ in tqdm(range(market.steps), desc=f'fee_rate:{fee_rate}, sigma_{sigma}'):
+    for _ in range(market.steps):
         # Get trader observations
         market_ask = market.get_ask_price('A') / market.get_bid_price('B')
         market_bid = market.get_bid_price('A') / market.get_ask_price('B')
@@ -72,7 +78,7 @@ def simulate_with_rl_amm(maker_dir, seed, sigma) -> Dict[float, List[float]]:
     dynamic_fees = []
 
     # Run the simulation for the given market steps
-    for _ in tqdm(range(market.steps), desc=f'RL Simulation, sigma={sigma}'):
+    for _ in range(market.steps):
         # Get AMM agent's observation and predict new fee rate
         obs = np.array([
             market.get_ask_price('A') / market.get_bid_price('B'),

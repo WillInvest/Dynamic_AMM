@@ -12,120 +12,70 @@ from env.new_amm import AMM
 import math
 
 
+import numpy as np
+
 class MarketSimulator:
     def __init__(self,
                  start_price=50000,
                  mu=0.0001,
                  sigma=None,
                  dt=1,
-                 deterministic=False,
                  steps=5000,
-                 seed=0):
+                 spread=0.01,
+                 seed=None):
         
-        # self.max_seed = 30
-        self.seed = seed 
-        self.rng = np.random.default_rng(self.seed)
         self.initial_price = start_price
-        self.initial_mu = mu
-        self.initial_sigma = sigma
-        self.initial_epsilon = self.initial_price * 0.0001
-        self.initial_dt = dt
+        self.sigma = sigma
         self.AP = start_price
         self.BP = start_price
         self.current_price = start_price
         self.mu = mu
-        self.initial_sigma = sigma
         self.random_sigma = True if sigma is None else False
-        self.epsilon = self.initial_price * 0.0001
-        # self.sigmaA = self.sigma
-        # self.sigmaB = self.sigmaA/2
+        self.spread = spread
         self.dt = dt
-        self.deterministic = deterministic  # Flag to control stochastic/deterministic behavior
-        self.index = 0  # Index to track the current shock
+        self.index = 0
         self.steps = steps
-        self.pathA = self.get_zigzag(steps=self.steps, high=1.5, low=0.5)
-        self.pathB = self.get_zigzag(steps=self.steps, high=1.2, low=0.8)
+
+        # Initialize random number generator, only if seed is provided
+        if seed is not None:
+            self.rng = np.random.default_rng(seed)
+        else:
+            self.rng = np.random.default_rng()  # Random behavior without a seed
 
     def get_random_sigma(self):
         return self.rng.choice([0.005, 0.006, 0.007, 0.008, 0.009, 0.01])
-    
-    def get_zigzag(self, steps, high, low):
-        
-        # Define the basic zigzag pattern: rise to 1.5, drop to 0.5, return to 1
-        rise_steps = steps // 3
-        drop_steps = steps // 3
-        return_steps = steps - (rise_steps + drop_steps)
-        
-        # Create the rise sequence from 1 to 1.5
-        rise_sequence = np.linspace(1, high, rise_steps)
-        
-        # Create the drop sequence from 1.5 to 0.5
-        drop_sequence = np.linspace(high, low, drop_steps)
-        
-        # Create the return sequence from 0.5 to 1
-        return_sequence = np.linspace(low, 1, return_steps)
-        
-        # Concatenate the sequences to form the full zigzag pattern
-        return np.concatenate((rise_sequence, drop_sequence, return_sequence))
 
     def get_bid_price(self, token):
         if token == "A":
-            # return self.AP / (1 + 0.01)
-            return self.AP - 0.01
-
+            return self.AP - self.spread
         elif token == "B":
-            # return self.BP / (1 + 0.01)
-            return self.BP - 0.01
+            return self.BP - self.spread
         else:
             print("Invalid input")
             
-
     def get_ask_price(self, token):
         if token == "A":
-            # return self.AP * (1 + 0.01)
-            return self.AP + 0.01
+            return self.AP + self.spread
         elif token == "B":
-            # return self.BP * (1 + 0.01)
-            return self.BP + 0.01
+            return self.BP + self.spread
         else:
             print("Invalid input")
 
     def next(self):
-        if self.random_sigma:
-            self.sigmaA = self.get_random_sigma()
-            self.sigmaB = self.get_random_sigma()
-        else:
-            self.sigmaA = self.initial_sigma
-            self.sigmaB = self.initial_sigma
-        
-        if self.deterministic:
-            
-            # Use a predetermined shock from the list
-            self.AP = self.initial_price * self.pathA[self.index%self.steps] 
-            self.BP = self.initial_price * self.pathB[self.index%self.steps]
-            self.index += 1
-        else:
-            # Stochastic update, random shock
-            shock1 = self.rng.normal()
-            shock2 = self.rng.normal()
+        shock1 = self.rng.normal()
+        shock2 = self.rng.normal()
 
-            # Update the current price using the GBM formula
-            self.AP *= np.exp(
-                (self.mu - 0.5 * self.sigmaA ** 2) * self.dt + self.sigmaA * np.sqrt(self.dt) * shock1)
-            self.BP *= np.exp(
-                (self.mu - 0.5 * self.sigmaB ** 2) * self.dt + self.sigmaB * np.sqrt(self.dt) * shock2)
-        
-
+        # Update the current price using the GBM formula
+        self.AP *= np.exp(
+            (self.mu - 0.5 * self.sigma ** 2) * self.dt + self.sigma * np.sqrt(self.dt) * shock1)
+        self.BP *= np.exp(
+            (self.mu - 0.5 * self.sigma ** 2) * self.dt + self.sigma * np.sqrt(self.dt) * shock2)
+    
     def reset(self):
         self.AP = self.initial_price
         self.BP = self.initial_price
-        self.mu = self.initial_mu
-        self.sigma = self.initial_sigma
-        self.epsilon = self.initial_epsilon
-        self.dt = self.initial_dt
-        self.index = 0  # Reset shock index
-        # self.seed += 1
-        # self.rng = np.random.default_rng(self.seed)
+        self.index = 0
+
         
         
 def simulate_amm_with_market(amm, market):
