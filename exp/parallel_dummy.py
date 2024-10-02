@@ -21,7 +21,7 @@ def run_simulation(fee_rate, sigma, seed, config):
     seed = seed + int(time.time())
     return simulate_with_constant_fee_rate(fee_rate, seed, sigma=sigma, config=config)
 
-def main(maker_dir, iterations, config):
+def main(iterations, config):
     # Create a directory for storing results
     results_dir = f"{os.path.expanduser('~')}/AMM-Python/results/dummy_results"
     os.makedirs(results_dir, exist_ok=True)
@@ -32,7 +32,7 @@ def main(maker_dir, iterations, config):
     fee_rates = np.round(np.arange(min_fee_rate, max_fee_rate, min_fee_rate), 4)
     
     # Define sigma values
-    sigma_values = [0.001, 0.005, 0.01, 0.05, 0.1, 0.5]
+    sigma_values = np.round(np.arange(0.001, 0.021, 0.001), 3)
     results = {}
 
     # Start parallel processing using ProcessPoolExecutor
@@ -95,11 +95,22 @@ def main(maker_dir, iterations, config):
     df = pd.DataFrame(flattened_results)
 
     # Save to CSV and use the timestamp as part of the filename
-    file_name = f"newa_results_spread_{config['spread']}_dt_{config['dt']:.4f}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    file_name = f"bitcoin_simulation_result_second.csv"
     csv_file_path = os.path.join(results_dir, file_name)
     df.to_csv(csv_file_path, index=False)
 
 if __name__ == "__main__":
+    
+    '''
+    S&P 500 Index
+    - **Hours**: 6.5 hours
+    - **Minutes**: \(6.5 \times 60 = 390\) minutes
+    - **Seconds**: \(390 \times 60 = 23,400\) seconds
+    Mean Daily Return: 0.0012640594294636917
+    Std Daily Return: 0.007856416105203289
+    '''
+    
+    
     dt = 1/3600
     mu = 0.0001
     start_price = 50000
@@ -113,5 +124,4 @@ if __name__ == "__main__":
         'start_price' : start_price,
         'steps' : steps
     }
-    maker_dir = f'{os.path.expanduser("~")}/AMM-Python/models/dummy_maker_model/rl_maker_17312000_steps.zip'
-    main(maker_dir, iterations=3000, config=config)
+    main(iterations=3000, config=config)

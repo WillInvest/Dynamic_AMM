@@ -130,11 +130,21 @@ def main(maker_dir, iterations, config):
     
 if __name__ == "__main__":
     
-    dt = 1/3600
-    mu = 0.0001
-    start_price = 50000
+    
+    '''
+    S&P 500 Index
+    - **Hours**: 6.5 hours
+    - **Minutes**: \(6.5 \times 60 = 390\) minutes
+    - **Seconds**: \(390 \times 60 = 23,400\) seconds
+    Mean Daily Return: 0.0012640594294636917
+    Std Daily Return: 0.007856416105203289
+    '''
+    
+    dt = 1/23400
+    mu = 0.001
+    start_price = 500
     steps = 5000
-    spread = 0.01
+    spread = 0.5
     
     config = {
         'mu' : mu, 
