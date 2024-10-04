@@ -16,12 +16,12 @@ import numpy as np
 
 class MarketSimulator:
     def __init__(self,
-                 start_price=50000,
-                 mu=0.0001,
+                 start_price=500,
+                 mu=0.06,
                  sigma=None,
-                 dt=1,
-                 steps=5000,
-                 spread=0.01,
+                 dt=1/(252*6.5), # 1 minute in trading days
+                 steps=7800, # number of minutes in 20 trading days
+                 spread=0.005,
                  seed=None):
         
         self.initial_price = start_price

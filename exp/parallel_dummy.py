@@ -32,7 +32,7 @@ def main(iterations, config):
     fee_rates = np.round(np.arange(min_fee_rate, max_fee_rate, min_fee_rate), 4)
     
     # Define sigma values
-    sigma_values = np.round(np.arange(0.001, 0.021, 0.001), 3)
+    sigma_values = np.round(np.arange(0.05, 0.36, 0.01), 3)
     results = {}
 
     # Start parallel processing using ProcessPoolExecutor
@@ -95,7 +95,7 @@ def main(iterations, config):
     df = pd.DataFrame(flattened_results)
 
     # Save to CSV and use the timestamp as part of the filename
-    file_name = f"bitcoin_simulation_result_second.csv"
+    file_name = f"bitcoin_simulation_result_minute.csv"
     csv_file_path = os.path.join(results_dir, file_name)
     df.to_csv(csv_file_path, index=False)
 
@@ -110,12 +110,12 @@ if __name__ == "__main__":
     Std Daily Return: 0.007856416105203289
     '''
     
-    
-    dt = 1/3600
-    mu = 0.0001
-    start_price = 50000
-    steps = 50000
-    spread = 0.01
+    start_price=500
+    mu=0.06
+    dt=1/(252*6.5*60)
+    steps=7800
+    spread=0.005
+        
     
     config = {
         'mu' : mu, 
