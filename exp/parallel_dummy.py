@@ -25,7 +25,7 @@ def run_simulation_with_dynamic_fee_rate(config):
 
 def parallel_constant(iterations, config):
     # Create a directory for storing results
-    results_dir = f"{os.path.expanduser('~')}/AMM-Python/results/dummy_results"
+    results_dir = f"{os.path.expanduser('~')}/Dynamic_AMM/results/dummy_results"
     os.makedirs(results_dir, exist_ok=True)
 
     # Define the fee rates
@@ -34,7 +34,7 @@ def parallel_constant(iterations, config):
     fee_rates = np.round(np.arange(min_fee_rate, max_fee_rate, 0.002), 4)
     
     # Define sigma values
-    sigma_values = np.round(np.arange(0.05, 5.05, 0.05), 3)
+    sigma_values = np.round(np.arange(5.05, 10.05, 0.05), 3)
     # sigma_values = [None]
     results = {}
 
@@ -104,12 +104,13 @@ def parallel_constant(iterations, config):
             # Save to CSV and use the timestamp as part of the filename
             time_stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             file_name = f"static_simulation_results_{sigma}.csv"
+            print(f"Saving results to {file_name}")
             csv_file_path = os.path.join(results_dir, file_name)
             df.to_csv(csv_file_path, index=False)
     
 def parallel_dynamic(iterations, config):
     # Create a directory for storing results
-    results_dir = f"{os.path.expanduser('~')}/AMM-Python/results/dummy_results"
+    results_dir = f"{os.path.expanduser('~')}/Dynamic_AMM/results/dummy_results"
     os.makedirs(results_dir, exist_ok=True)
     # Initialize containers for results
     total_pnls = []
@@ -175,7 +176,7 @@ if __name__ == "__main__":
     
     import gc
     time_stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    save_folder = f'/home/shiftpub/AMM-Python/results/dynamic_fees/{time_stamp}'
+    save_folder = f'/home/shiftpub/Dynamic_AMM/results/dynamic_fees/{time_stamp}'
     
     start_price=500
     mu=0.06
@@ -192,8 +193,10 @@ if __name__ == "__main__":
         'steps' : steps,
         'save_folder' : save_folder
     }
-    for iteration in [1000, 3000]:
-        parallel_constant(iteration, config)
-        gc.collect()
-        parallel_dynamic(iteration, config)
-        gc.collect()
+    
+    parallel_constant(1, config)
+    # for iteration in [1000, 3000]:
+    #     parallel_constant(iteration, config)
+    #     gc.collect()
+    #     parallel_dynamic(iteration, config)
+    #     gc.collect()

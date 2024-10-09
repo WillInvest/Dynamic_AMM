@@ -3,8 +3,8 @@ import sys
 import socket
 import gc
 
-# Get the path to the AMM-Python directory
-sys.path.append(f'{os.path.expanduser("~")}/AMM-Python')
+# Get the path to the Dynamic_AMM directory
+sys.path.append(f'{os.path.expanduser("~")}/Dynamic_AMM')
 
 import numpy as np
 import tensorflow as tf
@@ -61,7 +61,7 @@ def train(root_path):
         gc.collect()
 
 if __name__ == '__main__':
-    ROOT_DIR = f'{os.path.expanduser("~")}/AMM-Python/models'
+    ROOT_DIR = f'{os.path.expanduser("~")}/Dynamic_AMM/models'
     train(ROOT_DIR)
     
     

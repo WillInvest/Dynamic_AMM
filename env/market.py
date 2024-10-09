@@ -3,8 +3,8 @@ import sys
 import socket
 from collections import deque
 import pandas as pd
-# Get the path to the AMM-Python directory
-sys.path.append(f'{os.path.expanduser("~")}/AMM-Python')
+# Get the path to the Dynamic_AMM directory
+sys.path.append(f'{os.path.expanduser("~")}/Dynamic_AMM')
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt

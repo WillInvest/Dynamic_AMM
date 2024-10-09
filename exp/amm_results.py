@@ -18,7 +18,7 @@ time_stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 def main(trader_dir, maker_dir, iterations=300, verbose=False):
 
     # Create a directory for storing results
-    results_dir = f"{os.path.expanduser('~')}/AMM-Python/results/final_results"
+    results_dir = f"{os.path.expanduser('~')}/Dynamic_AMM/results/final_results"
     os.makedirs(results_dir, exist_ok=True)
     
     # Load the trained traders
@@ -212,6 +212,6 @@ def main(trader_dir, maker_dir, iterations=300, verbose=False):
     df.to_csv(csv_file_path, index=False)
     
 if __name__ == "__main__":
-    trader_dir = f'{os.path.expanduser("~")}/AMM-Python/models/trader_model'
-    maker_dir = f'{os.path.expanduser("~")}/AMM-Python/models/maker_model/rl_maker_14192000_steps.zip'
+    trader_dir = f'{os.path.expanduser("~")}/Dynamic_AMM/models/trader_model'
+    maker_dir = f'{os.path.expanduser("~")}/Dynamic_AMM/models/maker_model/rl_maker_14192000_steps.zip'
     main(trader_dir, maker_dir, iterations=30)

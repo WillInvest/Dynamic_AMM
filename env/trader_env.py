@@ -1,7 +1,7 @@
 import sys
 import os
- # Get the path to the AMM-Python directory
-sys.path.append(f'{os.path.expanduser("~")}/AMM-Python')
+ # Get the path to the Dynamic_AMM directory
+sys.path.append(f'{os.path.expanduser("~")}/Dynamic_AMM')
 from env.market import MarketSimulator
 from env.new_amm import AMM
 from typing import Tuple

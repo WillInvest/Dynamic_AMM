@@ -5,8 +5,8 @@ import argparse
 import sys  
 import socket
 import numpy as np
-# Get the path to the AMM-Python directory
-sys.path.append(f'{os.path.expanduser("~")}/AMM-Python')
+# Get the path to the Dynamic_AMM directory
+sys.path.append(f'{os.path.expanduser("~")}/Dynamic_AMM')
 # env related
 from env.market import MarketSimulator
 from env.new_amm import AMM
@@ -42,7 +42,7 @@ def train(root_path, model_idx=None):
     if model_idx is None:
         model = TD3("MlpPolicy", env, verbose=0, learning_rate=0.0003, train_freq=(n_envs*100, 'step'), gradient_steps=-1, action_noise=exploration_noise)
     else:
-        model_path = f'/home/shiftpub/AMM-Python/models/maker_model/rl_maker_{model_idx}_steps.zip'
+        model_path = f'/home/shiftpub/Dynamic_AMM/models/maker_model/rl_maker_{model_idx}_steps.zip'
         model = TD3.load(path=model_path, env=env)
     checkpoint_callback = CheckpointCallback(save_freq=CHECKPOINT_PER_STEP, save_path=model_dirs, name_prefix="rl_maker")
     wandb_callback = MakerWandbCallback()
@@ -59,5 +59,5 @@ def train(root_path, model_idx=None):
 
 if __name__ == '__main__':
     
-    ROOT_DIR = f'{os.path.expanduser("~")}/AMM-Python/models'
+    ROOT_DIR = f'{os.path.expanduser("~")}/Dynamic_AMM/models'
     train(ROOT_DIR)

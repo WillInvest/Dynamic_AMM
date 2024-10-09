@@ -283,7 +283,7 @@ def parallel_simulate_with_rl_amm(trader_paths, maker_dir, sigmas, iterations):
 
 if __name__ == "__main__":
     import dill as pickle
-    trader_dir = f'{os.path.expanduser("~")}/AMM-Python/models/trader_model'
+    trader_dir = f'{os.path.expanduser("~")}/Dynamic_AMM/models/trader_model'
     amm = AMM(fee=0.05)
     market = MarketSimulator(seed=1, sigma=0.2)
     traders = {}
