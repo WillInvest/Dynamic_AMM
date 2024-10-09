@@ -29,13 +29,13 @@ def parallel_constant(iterations, config):
     os.makedirs(results_dir, exist_ok=True)
 
     # Define the fee rates
-    max_fee_rate = 0.0205
+    max_fee_rate = 0.2005
     min_fee_rate = 0.0005
-    fee_rates = np.round(np.arange(min_fee_rate, max_fee_rate, min_fee_rate), 4)
+    fee_rates = np.round(np.arange(min_fee_rate, max_fee_rate, 0.002), 4)
     
     # Define sigma values
-    # sigma_values = np.round(np.arange(0.05, 0.1, 0.01), 3)
-    sigma_values = [None]
+    sigma_values = np.round(np.arange(0.05, 5.05, 0.05), 3)
+    # sigma_values = [None]
     results = {}
 
     # Start parallel processing using ProcessPoolExecutor
@@ -80,32 +80,32 @@ def parallel_constant(iterations, config):
                 }
             }
 
-    # Flatten results and save to CSV
-    flattened_results = []
+            # Flatten results and save to CSV
+            flattened_results = []
 
-    for sigma, data in results.items():
-        for fee_rate, pnls in data['constant']['total_pnls'].items():
-            for i in range(len(pnls)):
-                flattened_results.append({
-                    'sigma': sigma,
-                    'fee_rate': fee_rate,
-                    'pnl': pnls[i],
-                    'fee': data['constant']['total_fees'][fee_rate][i],
-                    'volume': data['constant']['total_vols'][fee_rate][i],
-                    'estimated_sigma': data['constant']['estimated_sigma_values'][fee_rate][i],
-                    # 'price_distance': data['constant']['total_price_distance'][fee_rate][i],
-                    # 'dynamic_fee': fee_rate,
-                    # 'total_transactions': data['constant']['total_transactions'][fee_rate][i]
-                })
+            for sigma, data in results.items():
+                for fee_rate, pnls in data['constant']['total_pnls'].items():
+                    for i in range(len(pnls)):
+                        flattened_results.append({
+                            'sigma': sigma,
+                            'fee_rate': fee_rate,
+                            'pnl': pnls[i],
+                            'fee': data['constant']['total_fees'][fee_rate][i],
+                            'volume': data['constant']['total_vols'][fee_rate][i],
+                            'estimated_sigma': data['constant']['estimated_sigma_values'][fee_rate][i],
+                            # 'price_distance': data['constant']['total_price_distance'][fee_rate][i],
+                            # 'dynamic_fee': fee_rate,
+                            # 'total_transactions': data['constant']['total_transactions'][fee_rate][i]
+                        })
 
-    # Convert to DataFrame
-    df = pd.DataFrame(flattened_results)
+            # Convert to DataFrame
+            df = pd.DataFrame(flattened_results)
 
-    # Save to CSV and use the timestamp as part of the filename
-    time_stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    file_name = f"static_simulation_results_{time_stamp}.csv"
-    csv_file_path = os.path.join(results_dir, file_name)
-    df.to_csv(csv_file_path, index=False)
+            # Save to CSV and use the timestamp as part of the filename
+            time_stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            file_name = f"static_simulation_results_{sigma}.csv"
+            csv_file_path = os.path.join(results_dir, file_name)
+            df.to_csv(csv_file_path, index=False)
     
 def parallel_dynamic(iterations, config):
     # Create a directory for storing results
