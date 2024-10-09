@@ -1,49 +1,77 @@
 import os
 import sys
 import socket
-
+from collections import deque
+import pandas as pd
 # Get the path to the AMM-Python directory
 sys.path.append(f'{os.path.expanduser("~")}/AMM-Python')
-
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 from env.new_amm import AMM
 import math
-
-
-import numpy as np
-
+from statsmodels.stats.diagnostic import acorr_ljungbox
+from scipy.stats import norm
+import yfinance as yf
+import time
 class MarketSimulator:
     def __init__(self,
                  start_price=500,
                  mu=0.06,
                  sigma=None,
-                 dt=1/(252*6.5), # 1 minute in trading days
-                 steps=7800, # number of minutes in 20 trading days
+                 dt=1/(252*6.5*60),  # 1 second in trading days
+                 steps=7800*60,  # number of seconds in 20 trading days
                  spread=0.005,
+                 clustering=False,
                  seed=None):
         
-        self.initial_price = start_price
-        self.sigma = sigma
-        self.AP = start_price
-        self.BP = start_price
-        self.current_price = start_price
-        self.mu = mu
-        self.random_sigma = True if sigma is None else False
-        self.spread = spread
-        self.dt = dt
-        self.index = 0
-        self.steps = steps
-
         # Initialize random number generator, only if seed is provided
         if seed is not None:
             self.rng = np.random.default_rng(seed)
         else:
             self.rng = np.random.default_rng()  # Random behavior without a seed
+        self.initial_price = start_price
+        self.AP = start_price
+        self.BP = start_price
+        self.current_price = start_price
+        self.mu = mu
+        self.random_sigma = True if sigma is None else False
+        self.sigma_t = sigma if sigma is not None else self.get_random_sigma()
+        self.spread = spread
+        self.dt = dt
+        self.index = 0
+        self.steps = steps
+        self.clustering = clustering
+        self.spy_mean = 0.0113 * np.sqrt(252)  # Annualized mean volatility
+        self.spy_std = 0.0076 * np.sqrt(252)  # Annualized standard deviation of volatility
+        # Initialize deque for GARCH variance calculation
+        self.reset_sigma()
+
+    def get_volatility_stats(self):
+        # Download SPY data
+        spy = yf.download('SPY', start='2020-01-01', end='2024-10-01')
+
+        # Calculate log returns and rolling volatility (20-day window, adjust as needed)
+        spy['Log_Returns'] = np.log(spy['Adj Close'] / spy['Adj Close'].shift(1))
+        spy['Volatility'] = spy['Log_Returns'].rolling(window=20).std()
+        spy = spy.dropna()
+
+        # Extract the volatility values
+        historical_volatility = spy['Volatility'].values
+
+        # Calculate mean and standard deviation of the historical volatility
+        mean = np.mean(historical_volatility)
+        std = np.std(historical_volatility)
+        print(f"SPY from 2020-01-01 to 2024-10-01: Mean Volatility: {mean:.4f}, Std Dev: {std:.4f}")
+
+        return mean, std
 
     def get_random_sigma(self):
-        return self.rng.choice([0.005, 0.006, 0.007, 0.008, 0.009, 0.01])
+        # Sample a sigma value from the normal distribution based on historical mean and std
+        # sampled_sigma = norm.rvs(loc=self.spy_mean, scale=self.spy_std, random_state=self.rng)
+        sampled_sigma = self.rng.uniform(0.05, 0.35)
+        # Ensure sampled sigma is positive (since volatilities can't be negative)
+        return sampled_sigma
 
     def get_bid_price(self, token):
         if token == "A":
@@ -62,22 +90,104 @@ class MarketSimulator:
             print("Invalid input")
 
     def next(self):
+        self.index += 1
         shock1 = self.rng.normal()
         shock2 = self.rng.normal()
 
-        # Update the current price using the GBM formula
+        # change sigma is steps is a multiple of 1000
+        if self.index % 23400 == 0:
+            if self.random_sigma:
+                if self.clustering:
+                    residual_shock = self.rng.normal()
+                    # Generate next volatility using the GARCH(2,2) process
+                    prev_variance = list(self.past_variance)
+                    prev_residual = list(self.past_residuals)
+                    new_variance = (
+                        self.alpha0 +
+                        self.alpha1 * prev_residual[-1]**2 +
+                        self.alpha2 * prev_residual[-2]**2 +
+                        self.beta1 * prev_variance[-1] +
+                        self.beta2 * prev_variance[-2]
+                                )
+                    self.sigma_t = np.sqrt(new_variance)
+                    self.past_variance.append(new_variance)
+                    self.past_residuals.append(residual_shock*self.sigma_t)
+                    
+                else:
+                    # Randomly choose a sigma within the range [0.05, 0.35]
+                    self.sigma_t = self.get_random_sigma()
+
+        # Update the current price using the GBM formula with the determined sigma
         self.AP *= np.exp(
-            (self.mu - 0.5 * self.sigma ** 2) * self.dt + self.sigma * np.sqrt(self.dt) * shock1)
+            (self.mu - 0.5 * self.sigma_t ** 2) * self.dt + self.sigma_t * np.sqrt(self.dt) * shock1)
         self.BP *= np.exp(
-            (self.mu - 0.5 * self.sigma ** 2) * self.dt + self.sigma * np.sqrt(self.dt) * shock2)
-    
+            (self.mu - 0.5 * self.sigma_t ** 2) * self.dt + self.sigma_t * np.sqrt(self.dt) * shock2)
+        
+    def reset_sigma(self):
+        self.past_variance = deque([0.2**2, 0.2**2], maxlen=2)  # Reset the GARCH variance with the initial value
+        self.past_residuals = deque([0.2, 0.2], maxlen=2)  # Reset the residuals with the initial value
+        # GARCH(2,2) parameters from the trained model
+        self.alpha0 = 3.6495997020763665e-06
+        self.alpha1 = 0.09999989631275566
+        self.alpha2 = 0.09999987518264385
+        self.beta1 = 0.39000083805952757
+        self.beta2 = 0.38999949273198525
+        
     def reset(self):
         self.AP = self.initial_price
         self.BP = self.initial_price
         self.index = 0
+        self.reset_sigma()
+        
+        
+ # Define a function to simulate the market and calculate the volatility       
+        
+def simulate_and_visualize(market, window_size=100):
+    # Lists to store time, mid prices, and calculated volatility values for visualization
+    time_steps = []
+    mkt_mid = []
+    sigma_values = []
+    log_returns = []
+    sum_log_returns = 0.0
+    sum_log_returns_sq = 0.0
 
-        
-        
+    # Run the simulation for the given number of steps
+    for _ in range(market.steps):
+        market.next()
+        mkt_ask = market.get_ask_price('A')
+        mkt_bid = market.get_bid_price('B')
+        mid_price = (mkt_ask + mkt_bid) / 2
+
+        # Calculate the log return
+        if len(mkt_mid) > 0:
+            last_price = mkt_mid[-1]
+            log_return = np.log(mid_price / last_price)
+            sum_log_returns += log_return
+            sum_log_returns_sq += log_return ** 2
+            log_returns.append(log_return)
+
+            # Maintain the window size for log returns
+            if len(log_returns) > window_size:
+                oldest_return = log_returns.pop(0)
+                sum_log_returns -= oldest_return
+                sum_log_returns_sq -= oldest_return ** 2
+
+            # Calculate volatility when the window size is met
+            if len(log_returns) == window_size:
+                mean_log_return = sum_log_returns / window_size
+                variance = (sum_log_returns_sq / window_size) - (mean_log_return ** 2)
+                current_sigma = np.sqrt(variance)
+                sigma_values.append(current_sigma)
+                time_steps.append(market.index)
+
+        mkt_mid.append(mid_price)
+        market.index += 1
+
+    return time_steps, sigma_values, log_returns
+
+
+# test whether the rule based Agent can take all arbitrage opportunities
+
 def simulate_amm_with_market(amm, market):
     # Fetch reserves
     reserve_a, reserve_b = amm.get_reserves()
@@ -101,117 +211,95 @@ def simulate_amm_with_market(amm, market):
     
     return amm_ask, amm_bid, new_amm_ask, new_amm_bid, swap_rate!=0
     
+def calculate_autocorrelation_squared_returns(log_returns, max_lag=20):
+    # Ensure squared_returns is 1-dimensional
+    squared_returns = np.array(log_returns)**2
+    squared_returns = squared_returns.flatten()  # Flatten to ensure it's 1-dimensional
 
+    autocorrelations = [pd.Series(squared_returns).autocorr(lag) for lag in range(1, max_lag+1)]
     
+    # Plotting the autocorrelation
+    plt.figure(figsize=(10, 6))
+    plt.bar(range(1, max_lag+1), autocorrelations)
+    plt.title('Autocorrelation of Squared Returns')
+    plt.xlabel('Lag')
+    plt.ylabel('Autocorrelation')
+    plt.show()
+    
+    return autocorrelations
+
+def calculate_ljung_box_test(log_returns, lags=10):
+    squared_returns = np.array(log_returns)**2
+    lb_test = acorr_ljungbox(squared_returns, lags=[lags], return_df=True)
+    p_value = lb_test['lb_pvalue'].iloc[0]
+    return lb_test, p_value
+
 if __name__ == '__main__':
-  
-    # from tqdm import tqdm
-    
-    # old_50 = [9, 13, 8, 17, 18, 16, 10, 18, 12, 18, 8, 17, 11, 13, 9, 21, 11, 11, 14, 18, 15, 8, 18, 15, 11, 12, 10, 12, 10, 13, 14, 9, 3, 10, 6, 10, 10, 15, 13, 15, 10, 15, 6, 9, 10, 10, 10, 7, 15, 3, 11, 14, 22, 21, 9, 22, 14, 11, 13, 14, 16, 13, 13, 19, 15, 10, 7, 8, 14, 14, 13, 14, 7, 13, 12, 10, 14, 22, 12, 15, 17, 4, 14, 18, 15, 13, 7, 13, 20, 13, 17, 8, 8, 15, 11, 13, 15, 8, 15, 15]
-    # old_500 = [149, 157, 128, 149, 155, 130, 129, 117, 167, 140, 115, 187, 138, 131, 128, 155, 133, 144, 126, 122, 144, 120, 153, 135, 139, 127, 132, 146, 148, 166, 141, 126, 137, 128, 136, 142, 141, 172, 151, 153, 158, 154, 138, 148, 144, 145, 130, 161, 152, 126, 126, 139, 151, 159, 142, 154, 137, 130, 150, 145, 123, 134, 144, 146, 116, 168, 124, 136, 131, 144, 164, 158, 129, 142, 128, 155, 152, 164, 138, 144, 138, 140, 136, 122, 141, 161, 113, 131, 135, 146, 157, 139, 115, 135, 165, 123, 130, 141, 131, 135]
-    # old_5000 = [1417, 1440, 1461, 1440, 1430, 1526, 1423, 1428, 1449, 1418, 1348, 1511, 1445, 1407, 1422, 1439, 1457, 1386, 1503, 1348, 1385, 1414, 1505, 1407, 1560, 1356, 1490, 1458, 1578, 1458, 1386, 1384, 1449, 1377, 1398, 1460, 1417, 1476, 1517, 1473, 1484, 1440, 1379, 1497, 1450, 1388, 1483, 1521, 1545, 1453, 1388, 1439, 1426, 1411, 1453, 1467, 1424, 1409, 1489, 1510, 1468, 1413, 1448, 1416, 1355, 1461, 1358, 1398, 1417, 1360, 1398, 1433, 1374, 1540, 1467, 1390, 1384, 1498, 1415, 1452, 1356, 1376, 1400, 1378, 1438, 1440, 1404, 1402, 1427, 1400, 1500, 1441, 1408, 1505, 1503, 1402, 1407, 1411, 1443, 1475]
-    # trade_counts = []
+ 
+    # Initialize two market simulators: one with clustering and one without
+    market_with_clustering = MarketSimulator(clustering=True)
+    market_without_clustering = MarketSimulator(clustering=False)
 
-    # for dt in [1, 1/60, 1/360]:
-    #     for steps in [50, 500, 5000]:
-    #         for seed in tqdm(range(100), desc=f'dt: {dt}, steps: {steps}'):    
-    #             sigma = None
-    #             market = MarketSimulator(start_price=50000, deterministic=False, steps=steps, seed=seed, sigma=sigma, dt=dt)
-    #             amm = AMM(fee=0.0005)
-    #             old_amm_asks = []
-    #             old_amm_bids = []
-    #             new_amm_asks = []
-    #             new_amm_bids = []
-    #             mkt_asks = []
-    #             mkt_bids = []
-    #             APs = []
-    #             BPs = []
-    #             trade_count = 0
+    # Simulate both markets
+    time_with_clustering, sigma_with_clustering, log_returns_with_clustering = simulate_and_visualize(market_with_clustering)
+    time_without_clustering, sigma_without_clustering, log_returns_without_clustering = simulate_and_visualize(market_without_clustering)
 
-    #             for _ in range(steps):
-    #                 mkt_asks.append(market.get_ask_price('A') / market.get_bid_price('B'))
-    #                 mkt_bids.append(market.get_bid_price('A') / market.get_ask_price('B'))
-    #                 old_amm_ask, old_amm_bid, new_amm_ask, new_amm_bid, if_trade = simulate_amm_with_market(amm, market)
-    #                 old_amm_asks.append(old_amm_ask)
-    #                 old_amm_bids.append(old_amm_bid)
-    #                 new_amm_asks.append(new_amm_ask)
-    #                 new_amm_bids.append(new_amm_bid)
-    #                 APs.append(market.AP)
-    #                 BPs.append(market.BP)
-    #                 trade_count += if_trade
-    #                 market.next()    
-            
-    #             trade_counts.append({
-    #                 'dt': dt,
-    #                 'total_steps': steps,
-    #                 'seed': seed,
-    #                 'trade_count': trade_count
-    #             })
-                
-    # trade_counts.extend([{'dt': 'old', 'total_steps': 50, 'seed': seed, 'trade_count': trade_count} for seed, trade_count in enumerate(old_50)])
-    # trade_counts.extend([{'dt': 'old', 'total_steps': 500, 'seed': seed, 'trade_count': trade_count} for seed, trade_count in enumerate(old_500)])
-    # trade_counts.extend([{'dt': 'old', 'total_steps': 5000, 'seed': seed, 'trade_count': trade_count} for seed, trade_count in enumerate(old_5000)])
+    # Calculate and display statistics for clustering effect
+    autocorrelations_with = calculate_autocorrelation_squared_returns(log_returns_with_clustering)
+    autocorrelations_without = calculate_autocorrelation_squared_returns(log_returns_without_clustering)
     
-    # pd.DataFrame(trade_counts).to_csv('trade_counts.csv')
-    
-    trade_counts = []
-    
-    for seed in range(100):
-    
-        steps = 50
-        sigma = None
-        market = MarketSimulator(start_price=50000, deterministic=False, steps=steps, seed=seed, sigma=sigma)
-        amm = AMM(fee=0.0005)
-        old_amm_asks = []
-        old_amm_bids = []
-        new_amm_asks = []
-        new_amm_bids = []
-        mkt_asks = []
-        mkt_bids = []
-        APs = []
-        BPs = []
-        trade_count = 0
+    # Perform Ljung-Box test
+    lb_test_with, p_value_with = calculate_ljung_box_test(log_returns_with_clustering)
+    lb_test_without, p_value_without = calculate_ljung_box_test(log_returns_without_clustering)
 
-        for _ in range(steps):
-            mkt_asks.append(market.get_ask_price('A') / market.get_bid_price('B'))
-            mkt_bids.append(market.get_bid_price('A') / market.get_ask_price('B'))
-            old_amm_ask, old_amm_bid, new_amm_ask, new_amm_bid, if_trade = simulate_amm_with_market(amm, market)
-            old_amm_asks.append(old_amm_ask)
-            old_amm_bids.append(old_amm_bid)
-            new_amm_asks.append(new_amm_ask)
-            new_amm_bids.append(new_amm_bid)
-            APs.append(market.AP)
-            BPs.append(market.BP)
-            trade_count += if_trade
-            market.next()    
-            
-        trade_counts.append(trade_count)
+    def remove_outliers(data, time_data, factor=3):
+        # Calculate the first and third quartile (Q1 and Q3)
+        q1 = np.percentile(data, 25)
+        q3 = np.percentile(data, 75)
+        iqr = q3 - q1  # Interquartile range
     
-    print(trade_counts)
+        # Calculate the lower and upper bounds to identify outliers
+        lower_bound = q1 - factor * iqr
+        upper_bound = q3 + factor * iqr
     
-    # Plotting the stair-step graph for the AMM old and new prices
-    plt.figure(figsize=(15, 10))
-    # plt.plot(np.arange(steps), APs, label='Asset A Price', linestyle='-', color='blue')
-    # plt.plot(np.arange(steps), BPs, label='Asset B Price', linestyle='-', color='green')
-    plt.plot(np.arange(steps), mkt_asks, label='Market Ask Price', linestyle='-', color='red')
-    plt.plot(np.arange(steps), mkt_bids, label='Market Bid Price', linestyle='-', color='purple')
-    # Plot old ask prices
-    # plt.step(np.arange(steps), old_amm_asks, where='post', label='Old AMM Ask Price', linestyle='--', color='blue')
-    # Plot new ask prices
-    plt.step(np.arange(steps), new_amm_asks, where='post', label='New AMM Ask Price', linestyle='-', color='blue')
-    # Plot old bid prices
-    # plt.step(np.arange(steps), old_amm_bids, where='post', label='Old AMM Bid Price', linestyle='--', color='green')
-    # Plot new bid prices
-    plt.step(np.arange(steps), new_amm_bids, where='post', label='New AMM Bid Price', linestyle='-', color='green')
-    # Adding labels and title
-    plt.title(f"AMM Old and New Prices (Stair-Step Plot) : {steps} steps, total arbitrage count: {trade_count}", fontsize=16)
-    plt.xlabel("Steps", fontsize=14)
-    plt.ylabel("Price", fontsize=14)
+        # Filter the data to only include values within the bounds
+        filtered_data = [(x, t) for x, t in zip(data, time_data) if lower_bound <= x <= upper_bound]
     
-    # Adding grid and legend
+        # Separate the filtered values back into two lists
+        filtered_values, filtered_time = zip(*filtered_data)
+        return list(filtered_time), list(filtered_values)
+
+    # Filter sigma values and time to remove outliers
+    filtered_time_with_clustering, filtered_sigma_with_clustering = remove_outliers(sigma_with_clustering, time_with_clustering)
+    filtered_time_without_clustering, filtered_sigma_without_clustering = remove_outliers(sigma_without_clustering, time_without_clustering)
+
+    # Plot the results
+    plt.figure(figsize=(14, 6))
+
+    # Plot with clustering
+    plt.subplot(1, 2, 1)
+    plt.plot(filtered_time_with_clustering, filtered_sigma_with_clustering, color='blue', label='Autocorrelation: {:.4f}\nLjung-Box p-value: {:.4f}'.format(
+        autocorrelations_with[0], p_value_with))
+    plt.title('Volatility with Clustering (GARCH)')
+    plt.xlabel('Time (seconds)')
+    plt.ylabel('Volatility (sigma)')
     plt.grid(True)
-    plt.legend(loc='best')
-    plt.savefig("stair-step-plot.png")
-    
-    # Show plot
+    plt.legend()
+
+    # Get the y-axis limits from the filtered plot with clustering
+    y_limits = plt.gca().get_ylim()
+
+    # Plot without clustering using the same y-axis limits
+    plt.subplot(1, 2, 2)
+    plt.plot(filtered_time_without_clustering, filtered_sigma_without_clustering, color='red', label='Autocorrelation: {:.4f}\nLjung-Box p-value: {:.4f}'.format(
+        autocorrelations_without[0], p_value_without))
+    plt.title('Volatility without Clustering')
+    plt.xlabel('Time (seconds)')
+    plt.ylabel('Volatility (sigma)')
+    plt.ylim(y_limits)  # Set y-axis limits to match the "with clustering" plot
+    plt.grid(True)
+    plt.legend()
+
+    plt.tight_layout()
+    plt.savefig('volatility_comparison.png')
     plt.show()
