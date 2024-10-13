@@ -34,9 +34,8 @@ def parallel_constant(iterations, config):
     fee_rates = np.round(np.arange(min_fee_rate, max_fee_rate, 0.002), 4)
     
     # Define sigma values
-    sigma_values = np.round(np.arange(5.05, 10.05, 0.05), 3)
+    sigma_values = np.round(np.arange(0.05, 5.05, 0.05), 3)
     # sigma_values = [None]
-    results = {}
 
     # Start parallel processing using ProcessPoolExecutor
     with ProcessPoolExecutor() as executor:
@@ -68,6 +67,8 @@ def parallel_constant(iterations, config):
                 total_transactions_constant[fee_rate].append(total_transaction)
                 sigma_values_constant[fee_rate].append(estimated_mean_annualized_sigma)
 
+            # Initialize a dictionary to store the results for this sigma value
+            results = {}
             # Store the results for this sigma value in the unified results dictionary
             results[sigma] = {
                 'constant': {
@@ -194,7 +195,7 @@ if __name__ == "__main__":
         'save_folder' : save_folder
     }
     
-    parallel_constant(1, config)
+    parallel_constant(30, config)
     # for iteration in [1000, 3000]:
     #     parallel_constant(iteration, config)
     #     gc.collect()
