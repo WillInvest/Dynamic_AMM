@@ -1,6 +1,9 @@
 import os
-from .market import MarketSimulator
-from .new_amm import AMM
+import sys
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.append(project_root)
+from env.market import MarketSimulator
+from env.new_amm import AMM
 from typing import Tuple
 import numpy as np
 from gymnasium import spaces, Env
@@ -24,12 +27,12 @@ class DummyAMM(Env):
         self.cumulative_fee = 0
 
         # observation space
-        low = np.zeros(4)
-        high = np.inf * np.ones(4)
+        low = np.zeros(6)
+        high = np.inf * np.ones(6)
         self.observation_space = spaces.Box(low=low, high=high, dtype=np.float32)
         
         # action space
-        self.action_space = spaces.Box(low=0.0005, high=0.005, shape=(1,), dtype=np.float32)
+        self.action_space = spaces.Box(low=0.0005, high=0.0035, shape=(1,), dtype=np.float32)
         
     def get_rule_base_action(self):
         obs = self.get_trader_obs()
@@ -66,6 +69,7 @@ class DummyAMM(Env):
         market competence determine how much percent of arbitrage oppotunity will be taken by other traders in the market
         """
         self.amm.fee = action[0]
+        assert self.amm.fee > 0, "Fee rate must be greater than 0"
         swap_rate = self.get_rule_base_action()
         info = self.amm.swap(swap_rate)
         asset_delta = info['asset_delta']
@@ -74,14 +78,15 @@ class DummyAMM(Env):
         amm_cost = (asset_delta[asset_in] + fee[asset_in]) * self.market.get_ask_price(asset_in)
         market_gain = (abs(asset_delta[asset_out])) * self.market.get_bid_price(asset_out)
         pnl = (market_gain - amm_cost) / self.market.initial_price if swap_rate != 0 else 0
-        fee = (fee['A'] + fee['B']) / self.market.initial_price
+        fee = fee[asset_in] * self.market.get_ask_price(asset_in) / self.market.initial_price
         self.cumulative_fee += fee
         self.cumulative_pnl += pnl
         reward = fee
         
         info = {
             'cumulative_fee' : self.cumulative_fee,
-            'cumulative_pnl' : self.cumulative_pnl
+            'cumulative_pnl' : self.cumulative_pnl,
+            'fee_rate' : self.amm.fee
         }
         
         # increase the step count
@@ -101,17 +106,35 @@ class DummyAMM(Env):
         self.amm.reset()
         self.market.reset()
         obs = self.get_obs()
+        self.cumulative_fee = 0
+        self.cumulative_pnl = 0
         return obs, {}
     
     def get_obs(self) -> np.array:
+        market_ask = self.market.get_ask_price('A') / self.market.get_bid_price('B')
+        market_bid = self.market.get_bid_price('A') / self.market.get_ask_price('B')
+        market_mid = (market_ask + market_bid) / 2
+        amm_mid = self.amm.reserve_b / self.amm.reserve_a
+        distance = abs(market_mid - amm_mid)
         obs = np.array([
                   self.market.get_ask_price('A') / self.market.get_bid_price('B'),
                   self.market.get_bid_price('A') / self.market.get_ask_price('B'),
                   self.amm.reserve_b / self.amm.initial_shares,
-                  self.amm.reserve_a / self.amm.initial_shares
+                  self.amm.reserve_a / self.amm.initial_shares,
+                  self.amm.reserve_b / self.amm.reserve_a,
+                  self.step_count / self.market.steps
                   ], dtype=np.float32)
         return obs
  
     def render(self, mode='human'):
         pass
  
+if __name__ == '__main__':
+    market = MarketSimulator(sigma=-1)
+    amm = AMM()
+    env = DummyAMM(market=market, amm=amm)
+    env.reset()
+    for _ in range(1000):
+        action = [0.005]
+        obs, reward, done, trauncated, info = env.step(action)
+        # print(info['cumulative_fee'])

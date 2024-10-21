@@ -19,8 +19,8 @@ class MarketSimulator:
                  start_price=500,
                  mu=0.06,
                  sigma=None,
-                 dt=1/(252*6.5*60),  # 1 second in trading days
-                 steps=7800*60,  # number of seconds in 20 trading days
+                 dt=1/(252*6.5*60*60),  # 1 second in trading days
+                 steps=23400,  # number of seconds in 20 trading days
                  spread=0.005,
                  clustering=False,
                  seed=None):
@@ -35,8 +35,8 @@ class MarketSimulator:
         self.BP = start_price
         self.current_price = start_price
         self.mu = mu
-        self.random_sigma = True if sigma is None else False
-        self.sigma_t = sigma if sigma is not None else self.get_random_sigma()
+        self.random_sigma = True if sigma<0 else False
+        self.sigma_t = sigma if sigma>=0 else self.get_random_sigma()
         self.spread = spread
         self.dt = dt
         self.index = 0
@@ -95,7 +95,7 @@ class MarketSimulator:
         shock2 = self.rng.normal()
 
         # change sigma is steps is a multiple of 1000
-        if self.index % 23400 == 0:
+        if self.index % 60 == 0:
             if self.random_sigma:
                 if self.clustering:
                     residual_shock = self.rng.normal()

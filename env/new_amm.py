@@ -28,6 +28,7 @@ class AMM:
         return self.reserve_b / self.reserve_a
 
     def swap(self, amount):
+        assert self.fee > 0, "Fee rate must be greater than 0"
         asset_delta = {'A': 0, 'B': 0}
         fees = {'A': 0, 'B': 0}
         if amount >= 0:

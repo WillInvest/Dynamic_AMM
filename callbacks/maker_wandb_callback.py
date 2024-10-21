@@ -14,14 +14,16 @@ class WandbCallback(BaseCallback):
         cumulative_pnl = self.locals['infos'][0]['cumulative_pnl']
         # total_pnl = self.locals['infos'][0]['total_pnl']
         # total_fee = self.locals['infos'][0]['total_fee']
-        actions = self.locals['actions'][0]
+        # actions = self.locals['actions'][0]
+        
+        actions = self.locals['infos'][0]['fee_rate']
         done = self.locals['dones'][0]
         # swap_rates = self.locals['infos'][0]['swap_rates']
         # urgent_levels = self.locals['infos'][0]['urgent_levels']
         reward = self.locals['rewards'][0]
         noise = self.model.action_noise  # Access the action noise object
 
-        # Prepare log data
+        # # Prepare log data
         log_data = {
             "actions": actions,
             'reward': reward
@@ -31,14 +33,14 @@ class WandbCallback(BaseCallback):
         # for mc, level in urgent_levels.items():
         #     wandb.log({f"urgent_level/trader_{mc}": level})        
             
-        # Log noise for each action
-        if isinstance(noise, NormalActionNoise):
-            noise_values = noise.sigma
-            wandb.log({
-                "Noise/mean": np.mean(noise_values),
-                "Noise/std": np.std(noise_values),
-                "Noise/individual_values": noise_values.tolist()
-            })
+        # # Log noise for each action
+        # if isinstance(noise, NormalActionNoise):
+        #     noise_values = noise.sigma
+        #     wandb.log({
+        #         "Noise/mean": np.mean(noise_values),
+        #         "Noise/std": np.std(noise_values),
+        #         "Noise/individual_values": noise_values.tolist()
+        #     })
                 
         if done:
             wandb.log({
