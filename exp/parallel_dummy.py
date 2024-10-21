@@ -29,12 +29,12 @@ def parallel_constant(iterations, config, sigma):
     os.makedirs(results_dir, exist_ok=True)
 
     # Define the fee rates
-    max_fee_rate = 0.0300
+    max_fee_rate = 0.0301
     min_fee_rate = 0.0001
     fee_rates = np.round(np.arange(min_fee_rate, max_fee_rate, min_fee_rate), 4)
     
     # Define sigma values
-    sigma_values = np.round(np.arange(2.55, 10.05, 0.05), 3)
+    # sigma_values = np.round(np.arange(2.55, 10.05, 0.05), 3)
     # sigma_values = [None]
 
     # Start parallel processing using ProcessPoolExecutor
@@ -59,7 +59,7 @@ def parallel_constant(iterations, config, sigma):
         # Process the results as they are completed
         for future in tqdm(as_completed(future_to_sim), total=len(future_to_sim), desc=f'Sigma {sigma} parallel execution'):
             sigma, fee_rate = future_to_sim[future]
-            total_pnl, total_fee, total_vol, price_distance, total_transaction = future.result()
+            total_pnl, total_fee, total_vol, total_transaction = future.result()
              # Store the results in a list of dictionaries
             simulation_results.append({
                 'fee_rate': fee_rate,
@@ -67,7 +67,7 @@ def parallel_constant(iterations, config, sigma):
                 'total_pnl': total_pnl,
                 'total_fee': total_fee,
                 'total_vol': total_vol,
-                'price_distance': price_distance,
+                # 'price_distance': price_distance,
                 'total_transaction': total_transaction
             })
             
@@ -77,7 +77,7 @@ def parallel_constant(iterations, config, sigma):
 
         # Save to CSV and use the timestamp as part of the filename
         time_stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        file_name = f"static_simulation_results_{sigma}.csv"
+        file_name = f"static_simulation_results_{sigma}_{time_stamp}.csv"
         print(f"Saving results to {file_name}")
         csv_file_path = os.path.join(results_dir, file_name)
         df.to_csv(csv_file_path, index=False)
@@ -227,10 +227,10 @@ if __name__ == "__main__":
     }
     
     sigma_values = [0.1, 0.2]
-    
-    # for sigma in sigma_values:
-    # parallel_constant(300, config, sigma=-1)
-    parallel_dynamic(3000, config)
+    for _ in range(30):
+        for sigma in sigma_values:
+            parallel_constant(100, config, sigma=sigma)
+    # parallel_dynamic(3000, config)
     # for iteration in [1000, 3000]:
     #     parallel_constant(iteration, config)
     #     gc.collect()
