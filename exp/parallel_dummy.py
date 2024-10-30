@@ -226,10 +226,13 @@ if __name__ == "__main__":
         'save_folder' : save_folder
     }
     
-    sigma_values = [0.1, 0.2]
-    for _ in range(30):
+    sigma_values = [(0.075+0.05)/2, (0.075+0.1)/2, (0.1 + 0.125)/2, (0.15 + 0.125)/2, (0.15 + 0.175)/2, (0.175 + 0.2)/2]
+    # round the list by 4 decimal places
+    sigma_values = [round(x, 4) for x in sigma_values]
+    print(f"Sigma values: {sigma_values}")
+    for _ in range(300):
         for sigma in sigma_values:
-            parallel_constant(100, config, sigma=sigma)
+            parallel_constant(10, config, sigma=sigma)
     # parallel_dynamic(3000, config)
     # for iteration in [1000, 3000]:
     #     parallel_constant(iteration, config)

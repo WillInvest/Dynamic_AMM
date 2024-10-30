@@ -1,5 +1,6 @@
-from env.market import MarketSimulator
-from env.new_amm import AMM
+from env.oracle import OracleSimulator
+from env.amm import AMM
+from env.trader import Arbitrager
 from typing import Dict, List
 import numpy as np
 from stable_baselines3 import PPO, TD3
@@ -18,64 +19,23 @@ def simulate_with_constant_fee_rate(fee_rate, sigma, config) -> dict:
     market competence determines how much percent of arbitrage opportunities will be taken by other traders in the market.
     """
     amm = AMM(fee=fee_rate)
-    market = MarketSimulator(sigma=sigma,
+    market = OracleSimulator(sigma=sigma,
                              mu=config['mu'],
                              spread=config['spread'],
                              dt=config['dt'],
                              start_price=config['start_price'],
                              steps=config['steps'])
+    trader = Arbitrager(amm, market)
 
     # price_distance = 0
     total_pnl = 0
     total_fee = 0
     total_volume = 0
     total_transactions = 0
-    # mkt_mid = deque(maxlen=1000)
-    # log_returns = deque(maxlen=999)    
-    # sum_log_returns = 0
-    # sum_log_returns_sq = 0
-    # window_size = 999
-    # sigma_values = []
-
     # Loop over market steps
     for _ in range(int(market.steps)):
-        
-        # mkt_ask = market.get_ask_price('A')
-        # mkt_bid = market.get_bid_price('B')
-        # mid_price = (mkt_ask + mkt_bid) / 2
-
-        # if len(mkt_mid) > 0:
-        #     last_price = mkt_mid[-1]
-        #     log_return = np.log(mid_price / last_price)
-        #     sum_log_returns += log_return
-        #     sum_log_returns_sq += log_return ** 2
-        #     log_returns.append(log_return)
-
-        #     if len(log_returns) == window_size:
-        #         oldest_return = log_returns[0]
-        #         sum_log_returns -= oldest_return
-        #         sum_log_returns_sq -= oldest_return ** 2
-
-        # mkt_mid.append(mid_price)
-
-        # if len(mkt_mid) == 1000:
-        #     mean_log_return = sum_log_returns / window_size
-        #     variance = (sum_log_returns_sq / window_size) - (mean_log_return ** 2)
-        #     current_sigma = np.sqrt(variance)
-        #     sigma_values.append(current_sigma)
-            
-            
         # Get trader observations
-        market_ask = market.get_ask_price('A') / market.get_bid_price('B')
-        market_bid = market.get_bid_price('A') / market.get_ask_price('B')
-        amm_ask = (amm.reserve_b / amm.reserve_a) * (1+amm.fee)
-        amm_bid = (amm.reserve_b / amm.reserve_a) / (1+amm.fee)
-        if amm_ask < market_bid:
-            swap_rate = 1 - math.sqrt(amm.reserve_a * amm.reserve_b / (market_bid/(1+amm.fee))) / amm.reserve_a
-        elif amm_bid > market_ask:
-            swap_rate = math.sqrt((amm.reserve_a*amm.reserve_b*market_ask*(1+amm.fee)))/amm.reserve_b - 1
-        else:
-            swap_rate = 0
+        swap_info = trader.swap()
         
         info = amm.swap(swap_rate)
         asset_delta = info['asset_delta']
