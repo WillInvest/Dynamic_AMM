@@ -47,14 +47,13 @@ def run_simulation_with_constant_fee_rate(fee_rate, sigma, config):
     
     return total_pnl, total_fee, total_volume, impermanent_loss, net_profit, amm.lr, amm.ls, market.get_mid_price('r'), market.get_mid_price('s')
 
-def parallel_constant(iterations, config, sigma):
+def parallel_constant(iterations, config, sigma, results_dir):
     # Create a directory for storing results
-    results_dir = f"{os.path.expanduser('~')}/Dynamic_AMM/results/dummy_results"
     os.makedirs(results_dir, exist_ok=True)
 
     # Define the fee rates
-    max_fee_rate = 0.0305
-    min_fee_rate = 0.0005
+    max_fee_rate = 1
+    min_fee_rate = 0.05
     fee_rates = np.round(np.arange(min_fee_rate, max_fee_rate, min_fee_rate), 4)
 
     # Start parallel processing using ProcessPoolExecutor
@@ -131,7 +130,8 @@ if __name__ == "__main__":
         
     time_stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     save_folder = f'/home/shiftpub/Dynamic_AMM/results/dynamic_fees/{time_stamp}'
-    
+    results_dir = f"{os.path.expanduser('~')}/Dynamic_AMM/results_w25/dummy_results"
+
     start_price=500
     mu=0.06
     dt=1/(252*6.5*60*60)
@@ -152,6 +152,6 @@ if __name__ == "__main__":
     sigma_values = np.round(np.arange(0.05, 0.425, 0.025), 3)
 
     print(f"Sigma values: {sigma_values}")
-    for _ in range(60):
+    for _ in range(120):
         for sigma in sigma_values:
-            parallel_constant(25, config, sigma=sigma)
+            parallel_constant(100, config, sigma=sigma, results_dir=results_dir)
