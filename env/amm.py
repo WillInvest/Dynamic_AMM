@@ -47,7 +47,7 @@ class AMM:
 
         # return the information of the swap
         info = {'xs': xs, 'xr': xr, 'pre_ls': pre_ls, 'pre_lr': pre_lr,
-                'ls':self.ls, 'lr':self.lr, 'fee': fee}
+                'ls':self.ls, 'lr':self.lr, 'token_fee': fee}
         return info
 
     def reset(self):

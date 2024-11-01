@@ -30,13 +30,13 @@ def run_simulation_with_constant_fee_rate(fee_rate, sigma, config):
         trader.swap()
         market.next()
     # make the amm back to the mid price of the market as the initial state
-    if amm.ls/amm.lr > market.pr/market.ps:
-        x_r = (np.sqrt(amm.ls * amm.lr / (market.pr/market.ps)) - amm.lr) / (1-amm.f)
-    elif amm.ls/amm.lr < market.pr/market.ps:
-        x_r = (np.sqrt(amm.ls * amm.lr / (market.pr/market.ps)) - amm.lr)
-    else:
-        x_r = 0
-    amm.swap(x_r)
+    # if amm.ls/amm.lr > market.pr/market.ps:
+    #     x_r = (np.sqrt(amm.ls * amm.lr / (market.pr/market.ps)) - amm.lr) / (1-amm.f)
+    # elif amm.ls/amm.lr < market.pr/market.ps:
+    #     x_r = (np.sqrt(amm.ls * amm.lr / (market.pr/market.ps)) - amm.lr)
+    # else:
+    #     x_r = 0
+    # amm.swap(x_r)
     total_pnl = trader.pnl
     total_fee = trader.total_fee
     total_volume = trader.total_number_trade
