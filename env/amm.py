@@ -2,14 +2,14 @@ import numpy as np
 import random
 
 class AMM:
-    def __init__(self, ls=1000000, lr=1000000, fee=0.003, fee_pool=True):
+    def __init__(self, ls=1000000, lr=1000000, fee=0.003, distribute=True):
         self.initial_ls = ls
         self.initial_lr = lr
         self.ls = ls
         self.lr = lr
         self.k = self.ls * self.lr
         self.f = fee 
-        self.fee_pool = fee_pool
+        self.distribute = distribute
 
     def get_price(self):
         amm_ask = (self.ls / self.lr) / (1-self.f)
@@ -25,7 +25,7 @@ class AMM:
             xs = (self.ls * self.lr) / (self.lr + (1-self.f)*xr) - self.ls # negative and swap out 
             fee = xr * self.f
             # add the fee to the fee pool if fee_pool is True
-            if self.fee_pool:
+            if not self.distribute:
                 self.lr += fee 
                 fee = 0
             xr *= (1-self.f)
@@ -35,7 +35,7 @@ class AMM:
             xs = (1/(1-self.f)) * ((self.ls * self.lr) / (self.lr + xr) - self.ls)
             fee = xs * self.f
             # add the fee to the fee pool if fee_pool is True
-            if self.fee_pool:
+            if not self.distribute:
                 self.ls += fee
                 fee = 0
             xs *= (1-self.f)

@@ -11,7 +11,6 @@ class Arbitrager:
     def __init__(self, amm: AMM, oracle: OracleSimulator):
         self.amm = amm
         self.oracle = oracle
-        self.fee_pool = self.amm.fee_pool
         self.reset()
     
     def reset(self):
@@ -25,27 +24,28 @@ class Arbitrager:
         mkt_ask, mkt_bid = self.oracle.get_price()   
         amm_ask, amm_bid = self.amm.get_price()
         k = self.amm.ls * self.amm.lr
-        if self.amm.fee_pool:
-            if amm_ask < mkt_bid:
-                a = 1
-                b = (self.amm.ls * self.amm.f) / (mkt_bid * (1-self.amm.f)**2) + 2*self.amm.lr
-                c = self.amm.lr * (self.amm.lr - self.amm.ls/(mkt_bid * (1-self.amm.f)))
-                x_r = (-b + np.sqrt(b**2 - 4*a*c)) / (2*a)
-                swap_info = self.amm.swap(x_r)
-            elif amm_bid > mkt_ask:
-                a = 1
-                b = ((2-self.amm.f) * self.amm.lr) / (1 - self.amm.f)
-                c = self.amm.lr * (self.amm.lr/(1-self.amm.f) - self.amm.ls/mkt_ask)
-                x_r = (-b + np.sqrt(b**2 - 4*a*c)) / (2*a)
-                swap_info = self.amm.swap(x_r)
-            else:
-                swap_info = self.amm.swap(0)
-        else:
+        if self.amm.distribute:
             if amm_ask < mkt_bid:
                 x_r = np.sqrt(k/(mkt_bid * (1-self.amm.f))) - self.amm.lr
                 swap_info = self.amm.swap(x_r)
             elif amm_bid > mkt_ask:
                 x_r = (np.sqrt(k * (1-self.amm.f) / mkt_ask) - self.amm.lr) / (1-self.amm.f)
+                swap_info = self.amm.swap(x_r)
+            else:
+                swap_info = self.amm.swap(0)
+        else:
+            if amm_ask < mkt_bid:
+                a = 1 - self.amm.f
+                b = (2-self.amm.f) * self.amm.ls
+                c = self.amm.ls**2 - self.amm.ls*self.amm.lr*(1-self.amm.f)*mkt_bid
+                x_s = (-b + np.sqrt(b**2 - 4*a*c)) / (2*a)
+                x_r = -self.amm.lr * (1-self.amm.f) * x_s / (self.amm.ls + (1-self.amm.f) * x_s)
+                swap_info = self.amm.swap(x_r)
+            elif amm_bid > mkt_ask:
+                a = 1 - self.amm.f
+                b = (2-self.amm.f) * self.amm.lr
+                c = self.amm.lr**2 - self.amm.ls*self.amm.lr*(1-self.amm.f)/mkt_ask
+                x_r = (-b + np.sqrt(b**2 - 4*a*c)) / (2*a)
                 swap_info = self.amm.swap(x_r)
             else:
                 swap_info = self.amm.swap(0)
@@ -103,7 +103,7 @@ class Arbitrager:
             'amm_bid': self.amm.get_price()[1],
             'spread': self.oracle.spread,
             'fee_rate': self.amm.f,
-            'fee_pool': self.amm.fee_pool,
+            'fee_pool': self.amm.distribute,
             'mid_r': self.oracle.get_mid_price('r'),
             'mid_s': self.oracle.get_mid_price('s')
         }
