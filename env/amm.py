@@ -2,14 +2,14 @@ import numpy as np
 import random
 
 class AMM:
-    def __init__(self, ls=1000000, lr=1000000, fee=0.003, distribute=True, fee_source=1):
-        self.initial_ls = ls
-        self.initial_lr = lr
-        self.ls = ls
-        self.lr = lr
+    def __init__(self, initial_ls=1000000, initial_lr=1000000, fee_rate=0.003, fee_distribute=True, fee_source=1):
+        self.initial_ls = initial_ls
+        self.initial_lr = initial_lr
+        self.ls = initial_ls
+        self.lr = initial_lr
         self.k = self.ls * self.lr
-        self.f = fee 
-        self.distribute = distribute
+        self.f = fee_rate 
+        self.fee_distribute = fee_distribute
         self.fee_source = fee_source
 
     def get_price(self):
@@ -30,7 +30,7 @@ class AMM:
                 step_fee['r'] += fee
                 self.fee['r'] += fee
                 # add the fee to the fee pool if fee_pool is True
-                if not self.distribute:
+                if not self.fee_distribute:
                     self.lr += fee 
                     fee = 0
                 xr *= (1-self.f)
@@ -42,7 +42,7 @@ class AMM:
                 step_fee['s'] += fee
                 self.fee['s'] += fee
                 # add the fee to the fee pool if fee_pool is True
-                if not self.distribute:
+                if not self.fee_distribute:
                     self.ls += fee
                     fee = 0
                 xs *= (1-self.f)
@@ -58,7 +58,7 @@ class AMM:
                 step_fee['s'] += fee
                 self.fee['s'] += fee
                 # add the fee to the fee pool if fee_pool is True
-                if not self.distribute:
+                if not self.fee_distribute:
                     self.lr += fee 
                     fee = 0
                 xs *= (1-self.f)
@@ -70,7 +70,7 @@ class AMM:
                 step_fee['r'] += fee
                 self.fee['r'] += fee
                 # add the fee to the fee pool if fee_pool is True
-                if not self.distribute:
+                if not self.fee_distribute:
                     self.lr += fee
                     fee = 0
                 xr *= (1-self.f)
@@ -85,7 +85,7 @@ class AMM:
         #         fee = -xs * self.f
         #         step_fee['s'] = fee
         #         # add the fee to the fee pool if fee_pool is True
-        #         if not self.distribute:
+        #         if not self.fee_distribute:
         #             self.lr += fee 
         #             fee = 0
         #         xs *= (1-self.f)
@@ -96,7 +96,7 @@ class AMM:
         #         fee = -xr * self.f
         #         step_fee['r'] = fee
         #         # add the fee to the fee pool if fee_pool is True
-        #         if not self.distribute:
+        #         if not self.fee_distribute:
         #             self.lr += fee
         #             fee = 0
         #         xr *= (1-self.f)

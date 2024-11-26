@@ -8,23 +8,21 @@ from env.amm import AMM
 from env.oracle import OracleSimulator
 
 class Arbitrager:
-    def __init__(self, amm: AMM, oracle: OracleSimulator):
-        self.amm = amm
+    def __init__(self,oracle: OracleSimulator):
         self.oracle = oracle
+        self.amm = self.oracle.amm
         self.reset()
     
     def reset(self):
         self.pnl = 0
         self.total_number_trade = 0
         self.total_fee = 0
-        self.amm.reset()
         self.oracle.reset()
         
     def swap(self):
-        mkt_ask, mkt_bid = self.oracle.get_price()   
-        amm_ask, amm_bid = self.amm.get_price()
+        amm_ask, amm_bid, mkt_ask, mkt_bid = self.oracle.get_price()   
         k = self.amm.ls * self.amm.lr
-        if self.amm.distribute:
+        if self.amm.fee_distribute:
             if amm_ask < mkt_bid:
                 x_r = np.sqrt(k/(mkt_bid * (1-self.amm.f))) - self.amm.lr
                 swap_info = self.amm.swap(x_r)
@@ -63,7 +61,7 @@ class Arbitrager:
         # Calculate costs and gains
         ask_price_in = self.oracle.get_ask_price(token_in)
         bid_price_out = self.oracle.get_bid_price(token_out)
-        fee_cost = swap_info['token_fee'] * ask_price_in
+        fee_cost = swap_info['token_fee'][token_in] * ask_price_in
         amm_cost = asset_in * ask_price_in
         mkt_gain = -asset_out * bid_price_out
 
@@ -103,7 +101,7 @@ class Arbitrager:
             'amm_bid': self.amm.get_price()[1],
             'spread': self.oracle.spread,
             'fee_rate': self.amm.f,
-            'fee_pool': self.amm.distribute,
+            'fee_pool': self.amm.fee_distribute,
             'mid_r': self.oracle.get_mid_price('r'),
             'mid_s': self.oracle.get_mid_price('s')
         }
