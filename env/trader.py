@@ -3,6 +3,30 @@ from env.oracle import OracleSimulator
 
 class Arbitrager:
     def __init__(self, oracle: OracleSimulator):
+        """
+        Simulates an arbitrageur trading between AMM and market oracle prices.
+
+        Parameters:
+            oracle (OracleSimulator): Price oracle providing market prices
+
+        Methods:
+            reset(): Resets trading stats and oracle state
+            step(): Advances oracle one step and executes potential arbitrage
+            swap(): Calculates and executes optimal arbitrage trade if profitable
+
+        Private Methods:
+            _calculate_swap_amount(): Determines optimal trade size based on price differences
+                For fee_distribute=True:
+                    - When amm_ask < mkt_bid: Buy from AMM, sell to market
+                    - When amm_bid > mkt_ask: Buy from market, sell to AMM
+                For fee_distribute=False:
+                    - Uses quadratic formula to find optimal amounts
+               
+            _calculate_trade_metrics(): Computes trade results including:
+                - PnL and fees
+                - Pool value changes and impermanent loss
+                - Market prices and spreads
+        """
         self.oracle = oracle
         self.amm = self.oracle.amm
         self.reset()
@@ -20,25 +44,23 @@ class Arbitrager:
     def _calculate_swap_amount(self, amm_ask, amm_bid, mkt_ask, mkt_bid):
         k = self.amm.ls * self.amm.lr
         f = self.amm.f
-        
-        if self.amm.fee_distribute:
+        xr = 0
+        if self.amm.fee_source > 0:
             if amm_ask < mkt_bid:
-                return np.sqrt(k/(mkt_bid * (1-f))) - self.amm.lr
+                xr = np.sqrt(k / (mkt_bid * (1-f))) - self.amm.lr
+                assert xr < 0, f"xr={xr}, amm_ask={amm_ask}, mkt_bid={mkt_bid}"
             elif amm_bid > mkt_ask:
-                return (np.sqrt(k * (1-f) / mkt_ask) - self.amm.lr) / (1-f)
+                xr = (np.sqrt(k * (1-f) / mkt_ask) - self.amm.lr) / (1-f)
+                assert xr > 0, f"xr={xr}, amm_bid={amm_bid}, mkt_ask={mkt_ask}"
         else:
             if amm_ask < mkt_bid:
-                a = 1 - f
-                b = (2-f) * self.amm.ls
-                c = self.amm.ls**2 - self.amm.ls*self.amm.lr*(1-f)*mkt_bid
-                x_s = (-b + np.sqrt(b**2 - 4*a*c)) / (2*a)
-                return -self.amm.lr * (1-f) * x_s / (self.amm.ls + (1-f) * x_s)
-            elif amm_bid > mkt_ask:
-                a = 1 - f
-                b = (2-f) * self.amm.lr
-                c = self.amm.lr**2 - self.amm.ls*self.amm.lr*(1-f)/mkt_ask
-                return (-b + np.sqrt(b**2 - 4*a*c)) / (2*a)
-        return 0
+                xr = np.sqrt(k / (mkt_bid * (1-f))) - self.amm.lr
+                assert xr < 0, f"xr={xr}, amm_ask={amm_ask}, mkt_bid={mkt_bid}"
+            if amm_bid > mkt_ask:
+                xr = np.sqrt(k * (1-f) / mkt_ask) - self.amm.lr
+                assert xr > 0, f"xr={xr}, amm_bid={amm_bid}, mkt_ask={mkt_ask}"
+        
+        return xr
 
     def swap(self):
         amm_ask, amm_bid, mkt_ask, mkt_bid = self.oracle.get_price()
@@ -49,23 +71,19 @@ class Arbitrager:
 
     def _calculate_trade_metrics(self, swap_info, prev_amm_ask, prev_amm_bid):
         amm_ask, amm_bid, mkt_ask, mkt_bid = self.oracle.get_price()
-        
-        is_xr_positive = swap_info['xr'] > 0
-        asset_in = swap_info['xr'] if is_xr_positive else swap_info['xs']
-        asset_out = swap_info['xs'] if is_xr_positive else swap_info['xr']
-        token_in = 'r' if is_xr_positive else 's'
-        token_out = 's' if is_xr_positive else 'r'
-
-        ask_price_in = self.oracle.get_token_prices(token_in)['ask']
-        bid_price_out = self.oracle.get_token_prices(token_out)['bid']
-        
-        fee_cost = swap_info['token_fee'][token_in] * ask_price_in
-        amm_cost = asset_in * ask_price_in
-        mkt_gain = -asset_out * bid_price_out
-        pnl = mkt_gain - amm_cost - fee_cost
+        pr_bid, pr_ask, pr_mid = self.oracle.get_token_prices('r').values()
+        ps_bid, ps_ask, ps_mid = self.oracle.get_token_prices('s').values()
+        initial_cash = self.amm.initial_ls * self.oracle.initial_price * 2
+        fee_cost = (swap_info['token_fee']['r'] * self.oracle.get_token_prices('r')['ask'] + 
+                    swap_info['token_fee']['s'] * self.oracle.get_token_prices('s')['ask'])
+        amm_cost = (swap_info['arbitrage_cost']['r'] * self.oracle.get_token_prices('r')['ask'] +
+                    swap_info['arbitrage_cost']['s'] * self.oracle.get_token_prices('s')['ask'])
+        mkt_gain = (swap_info['arbitrage_gain']['r'] * self.oracle.get_token_prices('r')['bid'] +
+                    swap_info['arbitrage_gain']['s'] * self.oracle.get_token_prices('s')['bid'])
+        pnl = mkt_gain - amm_cost
 
         self.pnl += pnl
-        if swap_info['xr'] != 0:
+        if swap_info['arbitrage_gain'] != 0:
             self.total_number_trade += 1
             self.total_fee += fee_cost
 
@@ -75,29 +93,30 @@ class Arbitrager:
                             self.amm.ls * self.oracle.get_token_prices('s')['mid'])
         
         return {
-            'pnl': pnl,
             'fee_dollar_value': fee_cost,
             'total_fee_dollar_value': self.total_fee,
             'mkt_gain': mkt_gain,
             'amm_cost': amm_cost,
+            'trader_step_pnl': pnl,
+            'trader_total_pnl': self.pnl,
             'initial_pool_value': initial_pool_value,
             'current_pool_value': current_pool_value,
             'impermanent_loss': current_pool_value - initial_pool_value,
             'net_profit': self.total_fee + (current_pool_value - initial_pool_value),
-            'total_number_trade': self.total_number_trade,
-            'token_in': token_in,
-            'token_out': token_out,
-            'asset_in': asset_in,
-            'asset_out': asset_out,
+            'account_profit': self.total_fee + (current_pool_value - initial_cash),
             'mkt_ask': mkt_ask,
             'mkt_bid': mkt_bid,
             'prev_amm_ask': prev_amm_ask,
             'prev_amm_bid': prev_amm_bid,
             'amm_ask': amm_ask,
             'amm_bid': amm_bid,
+            'mid_r': pr_mid,
+            'mid_s': ps_mid,
+            'bid_r': pr_bid,
+            'bid_s': ps_bid,
+            'ask_r': pr_ask,
+            'ask_s': ps_ask,
+            'total_number_trade': self.total_number_trade,
             'spread': self.oracle.spread,
-            'fee_rate': self.amm.f,
-            'fee_pool': self.amm.fee_distribute,
-            'mid_r': self.oracle.get_token_prices('r')['mid'],
-            'mid_s': self.oracle.get_token_prices('s')['mid']
+            'fee_rate': self.amm.f
         }

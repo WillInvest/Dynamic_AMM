@@ -2,18 +2,38 @@ import numpy as np
 from env.amm import AMM
 
 class OracleSimulator:
-    def __init__(self, fee_rate=0.003, fee_distribute=True, fee_source=1,
-                 initial_lr=1000000, initial_ls=1000000, start_price=500,
+    def __init__(self, amm, start_price=500,
                  mu=0, sigma=0.2, dt=1/(252*6.5*60), steps=23400,
-                 spread=0, alpha=0.5, seed=None):
+                 spread=0, alpha=0.5, kappa=1.0, seed=None):
+        """
+        Simulates oracle prices for two tokens (stable and risky) and manages AMM interaction.
+   
+        Parameters:
+            fee_rate (float): AMM fee percentage, default 0.003 (0.3%)
+            fee_distribute (bool): If True, distributes fees to LPs immediately, default True
+            fee_source (int): 1 to collect fees from incoming tokens, -1 from outgoing tokens
+            initial_lr (int): Initial risky token liquidity in AMM, default 1M
+            initial_ls (int): Initial stable token liquidity in AMM, default 1M 
+            start_price (float): Initial price of stable token, default 500
+            mu (float): Drift term for price evolution, default 0
+            sigma (float): Volatility factor for price evolution, default 0.2
+                          If negative, randomly samples from U(0.05, 0.35)
+            dt (float): Time step size, default 1/(252*6.5*60) (1 second in trading days)
+            steps (int): Number of simulation steps, default 23400 (1 trading day)
+            spread (float): Market maker spread added to oracle token prices, default 0
+            alpha (float): Position of initial oracle price relative to AMM spread
+                          0.5 aligns with AMM mid price
+                          0 aligns with AMM bid price  
+                          1 aligns with AMM ask price
+            kappa (float): Mean reversion factor for stable token price, default 1.0
+            seed (int): Random number generator seed for reproducibility, default None
+        """
         
-        self.amm = AMM(fee_rate=fee_rate, initial_lr=initial_lr, 
-                       initial_ls=initial_ls, fee_distribute=fee_distribute, 
-                       fee_source=fee_source)
-        
+        self.amm = amm
         self.rng = np.random.default_rng(seed)
         self.initial_price = start_price
         self.alpha = alpha
+        self.kappa = kappa
         self.mu = mu
         self.random_sigma = sigma < 0
         self.sigma = sigma if sigma >= 0 else self.get_random_sigma()
@@ -48,11 +68,14 @@ class OracleSimulator:
 
     def next(self):
         self.index += 1
-        gbm_factor = (self.mu - 0.5 * self.sigma ** 2) * self.dt
-        random_factor = self.sigma * np.sqrt(self.dt) * self.rng.normal()
+        s_drift = self.kappa * (1 - self.ps/self.initial_price)
         
-        self.ps *= np.exp(gbm_factor + random_factor)
-        self.pr *= np.exp(gbm_factor + random_factor)
+        # Separate random draws
+        z1 = self.rng.normal()
+        z2 = self.rng.normal()
+        
+        self.ps *= np.exp(s_drift * self.dt + (self.sigma * 0.1) * np.sqrt(self.dt) * z1)
+        self.pr *= np.exp(self.mu * self.dt + self.sigma * np.sqrt(self.dt) * z2)
 
     def reset(self):
         self.amm.reset()
