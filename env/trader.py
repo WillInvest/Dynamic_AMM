@@ -83,7 +83,7 @@ class Arbitrager:
         pnl = mkt_gain - amm_cost
 
         self.pnl += pnl
-        if swap_info['arbitrage_gain'] != 0:
+        if swap_info['arbitrage_gain']['r'] != 0:
             self.total_number_trade += 1
             self.total_fee += fee_cost
 

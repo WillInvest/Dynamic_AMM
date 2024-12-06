@@ -51,11 +51,12 @@ def main():
     os.makedirs(results_dir, exist_ok=True)
 
     # Parameters
-    sigmas = np.arange(0.1, 0.5, 0.1)
-    fee_rates = np.arange(0.001, 0.1, 0.001)
+    # sigmas = np.arange(0.1, 2.1, 0.1)
+    sigmas = [0.1, 0.2, 0.3, 0.4]
+    fee_rates = np.concatenate([np.arange(0.001, 0.011, 0.001), np.arange(0.02, 0.101, 0.01)])
     fee_sources = [1]
-    n_seeds = 50000
-    chunk_size = 2000
+    n_seeds = 1_000_000
+    chunk_size = 20000
     n_chunks = n_seeds // chunk_size
 
     # Setup multiprocessing
