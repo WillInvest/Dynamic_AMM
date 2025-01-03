@@ -52,7 +52,7 @@ def main():
 
     # Parameters
     # sigmas = np.arange(0.1, 2.1, 0.1)
-    sigmas = [0.1, 0.2, 0.3, 0.4]
+    sigmas = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
     fee_rates = np.concatenate([np.arange(0.001, 0.011, 0.001), np.arange(0.02, 0.101, 0.01)])
     fee_sources = [1]
     n_seeds = 1_000_000
