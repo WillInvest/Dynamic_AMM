@@ -182,7 +182,6 @@ class MetricsAnalysis:
         """
         if is_ingoing:
             if has_drift:
-                # Equation: ∫[0,1-f] ℓs·(1+v)·(√(1/v) + √(1/(1-f)))² φ(v) dv
                 def value_integrand(v: float) -> float:
                     sqrt_term = np.sqrt(1/v) + np.sqrt(1/(1-f))
                     return self.ell_s * (1 + v) * sqrt_term**2 * self._lognormal_pdf(v, sigma, has_drift)
@@ -191,7 +190,6 @@ class MetricsAnalysis:
                     sqrt_term = np.sqrt(1/v) - np.sqrt(1/(1-f))
                     return self.ell_s * (1 + v) * sqrt_term**2 * self._weighted_sensitivity(v, sigma, has_drift)
             else:
-                # Equation: ∫[0,1-f] 2ℓs·(1 - √(v/(1-f)))² φ(v) dv
                 def value_integrand(v: float) -> float:
                     sqrt_term = 1 - np.sqrt(v/(1-f))
                     return 2 * self.ell_s * sqrt_term**2 * self._lognormal_pdf(v, sigma, has_drift)
@@ -201,23 +199,21 @@ class MetricsAnalysis:
                     return 2 * self.ell_s * sqrt_term**2 * self._weighted_sensitivity(v, sigma, has_drift)
         else:
             if has_drift:
-                # Equation: ∫[0,1-f] ℓs·(1+v)·((1+v)/v - (2-f)/√(v(1-f))) φ(v) dv
                 def value_integrand(v: float) -> float:
-                    term1 = (1 + v) / v
-                    term2 = (2 - f) / np.sqrt(v * (1-f))
-                    return self.ell_s * (1 + v) * (term1 - term2) * self._lognormal_pdf(v, sigma, has_drift)
+                    sqrt_term = 1 - np.sqrt((1-f)/v)
+                    return self.ell_s * (1 + v) * sqrt_term**2 * self._lognormal_pdf(v, sigma, has_drift)
                 
                 def vega_integrand(v: float) -> float:
-                    term1 = (1 + v) / v
-                    term2 = (2 - f) / np.sqrt(v * (1-f))
-                    return self.ell_s * (1 + v) * (term1 - term2) * self._weighted_sensitivity(v, sigma, has_drift)
+                    sqrt_term = 1 - np.sqrt((1-f)/v)
+                    return self.ell_s * (1 + v) * sqrt_term**2 * self._weighted_sensitivity(v, sigma, has_drift)
             else:
-                # Equation: ∫[0,1-f] 2ℓs·(1 - √(v/(1-f))·(2-f) + v) φ(v) dv
                 def value_integrand(v: float) -> float:
-                    return 2 * self.ell_s * (1 - np.sqrt(v/(1-f))*(2-f) + v) * self._lognormal_pdf(v, sigma, has_drift)
+                    sqrt_term = np.sqrt(v) - np.sqrt(1-f)
+                    return 2 * self.ell_s * sqrt_term**2 * self._lognormal_pdf(v, sigma, has_drift)
                 
                 def vega_integrand(v: float) -> float:
-                    return 2 * self.ell_s * (1 - np.sqrt(v/(1-f))*(2-f) + v) * self._weighted_sensitivity(v, sigma, has_drift)
+                    sqrt_term = np.sqrt(v) - np.sqrt(1-f)
+                    return 2 * self.ell_s * sqrt_term**2 * self._weighted_sensitivity(v, sigma, has_drift)
 
         # Calculate value and vega using numerical integration
         value, _ = quad(value_integrand, 1e-4, 1-f)
@@ -600,13 +596,13 @@ if __name__ == "__main__":
     analyzer = MetricsAnalysis()
     # Only calculate base metrics
     base_metrics = [
-        'expected_fee',
-        'pool_value',
+        # 'expected_fee',
+        # 'pool_value',
         'trader_pnl'
     ]
     analyzer.get_metrics(
         sigmas=np.round(np.arange(0.1, 8.1, 0.1), 1),
-        fee_rates=np.linspace(0.0001, 0.9, 100),
+        fee_rates=np.linspace(0.0001, 0.9, 1000),
         metrics=base_metrics,
         output_dir='/home/shiftpub/Dynamic_AMM/output/metrics'
     )
