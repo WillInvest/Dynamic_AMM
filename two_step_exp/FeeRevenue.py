@@ -2,19 +2,10 @@
 import numpy as np
 from typing import Tuple
 from scipy import integrate
-from SwapReserve import SwapReserves
+from .BasePool import BasePool
 
-class FeeRevenues:
+class FeeRevenues(BasePool):
     """Class for calculating expected fee revenue"""
-    
-    def __init__(self, ell_s: float, ell_r: float):
-        self.ell_s = ell_s
-        self.ell_r = ell_r
-        self.calc = SwapReserves(ell_s, ell_r)
-        
-    def phi(self, v: float, sigma: float) -> float:
-        """PDF for geometric brownian motion with zero drift"""
-        return 1/(v * sigma * np.sqrt(2*np.pi)) * np.exp(-(np.log(v) + sigma**2/2)**2/(2*sigma**2))
     
     def get_expected_fee_revenue(self, f: float, sigma: float, fee_source: str) -> Tuple[float, float]:
         """
@@ -133,30 +124,24 @@ class FeeRevenues:
         # Step 1 integration
         E_F1_up = integrate.quad(integrand_up_1, 1/(1-f), np.inf)[0]
         E_F1_mid = integrate.quad(integrand_mid_1, 1-f, 1/(1-f))[0]
-        E_F1_down = integrate.quad(integrand_down_1, 1e-4, 1-f)[0]
+        E_F1_down = integrate.quad(integrand_down_1, 0, 1-f)[0]
         E_F1 = E_F1_up + E_F1_mid + E_F1_down
         
         # Step 2 integration - all nine cases
         # Upper region (v1 > 1/(1-f))
         E_F2_uu = integrate.dblquad(integrand_uu, 1/(1-f), np.inf, lambda v1: 1, lambda v1: np.inf)[0]
         E_F2_um = integrate.dblquad(integrand_um, 1/(1-f), np.inf, lambda v1: (1-f)**2, lambda v1: 1)[0]
-        E_F2_ud = integrate.dblquad(integrand_ud, 1/(1-f), np.inf, lambda v1: 1e-4, lambda v1: (1-f)**2)[0]
+        E_F2_ud = integrate.dblquad(integrand_ud, 1/(1-f), np.inf, lambda v1: 0, lambda v1: (1-f)**2)[0]
         
         # Middle region (1-f < v1 < 1/(1-f))
-        E_F2_mu = integrate.dblquad(integrand_mu, 1-f, 1/(1-f), 
-                                  lambda v1: 1/(v1*(1-f)), lambda v1: np.inf)[0]
-        E_F2_mm = integrate.dblquad(integrand_mm, 1-f, 1/(1-f),
-                                  lambda v1: (1-f)/v1, lambda v1: 1/(v1*(1-f)))[0]
-        E_F2_md = integrate.dblquad(integrand_md, 1-f, 1/(1-f),
-                                  lambda v1: 1e-4, lambda v1: (1-f)/v1)[0]
+        E_F2_mu = integrate.dblquad(integrand_mu, 1-f, 1/(1-f), lambda v1: 1/(v1*(1-f)), lambda v1: np.inf)[0]
+        E_F2_mm = integrate.dblquad(integrand_mm, 1-f, 1/(1-f),lambda v1: (1-f)/v1, lambda v1: 1/(v1*(1-f)))[0]
+        E_F2_md = integrate.dblquad(integrand_md, 1-f, 1/(1-f),lambda v1: 0, lambda v1: (1-f)/v1)[0]
         
         # Lower region (v1 < 1-f)
-        E_F2_du = integrate.dblquad(integrand_du, 0, 1-f,
-                                  lambda v1: 1/(1-f)**2, lambda v1: np.inf)[0]
-        E_F2_dm = integrate.dblquad(integrand_dm, 0, 1-f,
-                                  lambda v1: 1, lambda v1: 1/(1-f)**2)[0]
-        E_F2_dd = integrate.dblquad(integrand_dd, 0, 1-f,
-                                  lambda v1: 1e-4, lambda v1: 1)[0]
+        E_F2_du = integrate.dblquad(integrand_du, 0, 1-f,lambda v1: 1/(1-f)**2, lambda v1: np.inf)[0]
+        E_F2_dm = integrate.dblquad(integrand_dm, 0, 1-f,lambda v1: 1, lambda v1: 1/(1-f)**2)[0]
+        E_F2_dd = integrate.dblquad(integrand_dd, 0, 1-f,lambda v1: 0, lambda v1: 1)[0]
         
         E_F2 = E_F2_uu + E_F2_um + E_F2_ud + E_F2_mu + E_F2_mm + E_F2_md + E_F2_du + E_F2_dm + E_F2_dd
         
