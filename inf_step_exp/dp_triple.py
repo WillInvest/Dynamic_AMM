@@ -123,7 +123,7 @@ class AMM:
             Tensor of shape (num_samples, 3) containing (p, x, y)
         """    
         # Generate x values uniformly between 50 and 100
-        x_values = torch.FloatTensor(num_samples).uniform_(50, 150)
+        x_values = torch.FloatTensor(num_samples).uniform_(9500, 10500)
         
         # Calculate corresponding y values using constant product L = x*y
         y_values = self.L**2 / x_values
@@ -229,7 +229,7 @@ class AMM:
             # For each p point
             for p_idx, p in enumerate(p_points):
                 # Create state (p, x, y)
-                state = torch.tensor([p, x, y], dtype=torch.float32).to(self.device)
+                state = torch.tensor([p, x, y], dtype=torch.float32)
                 all_states.append(state)
             
                 # Calculate immediate reward for this state
@@ -253,14 +253,14 @@ class AMM:
                 p_prime_transformed_weights = p_prime_weights * 0.5 * (log_p_max - log_p_min)
             
                 # Convert to actual prices
-                p_prime_points = torch.tensor(np.exp(log_p_prime_points), dtype=torch.float32).to(self.device)
+                p_prime_points = torch.tensor(np.exp(log_p_prime_points), dtype=torch.float32)
             
                 # Calculate new states based on AMM mechanics
                 p_upper = price_ratio / (1 - self.gamma)
                 p_lower = price_ratio * (1 - self.gamma)
             
-                new_x = torch.zeros_like(p_prime_points).to(self.device)
-                new_y = torch.zeros_like(p_prime_points).to(self.device)
+                new_x = torch.zeros_like(p_prime_points)
+                new_y = torch.zeros_like(p_prime_points)
             
                 # Apply AMM rules using masks
                 above_mask = p_prime_points > p_upper
@@ -293,7 +293,7 @@ class AMM:
                 # Calculate PDF values for log-normal distribution (p' given p)
                 log_terms = (torch.log(p_prime_points/p) - (self.mu - 0.5 * self.sigma**2) * self.delta_t)**2
                 denominator = 2 * self.sigma**2 * self.delta_t
-                pi_term = torch.tensor(np.sqrt(2 * np.pi * self.delta_t), dtype=torch.float32).to(self.device)
+                pi_term = torch.tensor(np.sqrt(2 * np.pi * self.delta_t), dtype=torch.float32)
                 p_prime_pdf_values = torch.exp(-log_terms / denominator) / (p_prime_points * self.sigma * pi_term)  
                 # Calculate expected value through integration over p'
                 integrand = values * p_prime_pdf_values
