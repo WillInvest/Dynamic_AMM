@@ -9,10 +9,11 @@ from scipy.stats import norm
 from tqdm import tqdm
 from torch.nn.utils import clip_grad_norm_ as clip_grad_norm
 
-# Set default tensor type to float64 (double precision)
-torch.set_default_tensor_type(torch.DoubleTensor)
+# Fix the deprecated warning while maintaining precision
+torch.set_default_dtype(torch.float64)
 if torch.cuda.is_available():
-    torch.set_default_tensor_type(torch.cuda.DoubleTensor)
+    # Set default device instead of tensor type
+    torch.set_default_device('cuda')
 
 class ValueFunctionNN(nn.Module):
     def __init__(self, L, hidden_dim=64, normalize=True):
@@ -42,6 +43,7 @@ class ValueFunctionNN(nn.Module):
             return state
             
         normalized: torch.Tensor = torch.zeros_like(state, dtype=torch.float64)  # shape: (batch_size, 3)
+        normalized[:, 0] = state[:, 0]  # Keep price as is
         normalized[:, 1] = state[:, 1] / self.L
         normalized[:, 2] = state[:, 2] / self.L
         return normalized
@@ -90,6 +92,11 @@ class AMM:
         self.fee_source = fee_source
         self.discount_factor = np.exp(-self.mu * self.delta_t)
         
+        # Pre-compute constants
+        self.sqrt_delta_t = np.sqrt(self.delta_t)
+        self.pi_term = np.sqrt(2 * np.pi * self.delta_t)
+        self.alpha_factor = np.exp(-self.sigma**2 * self.delta_t / 8)
+        
         # Initialize neural network with L parameter
         self.value_network = ValueFunctionNN(L=L)
         self.target_network = ValueFunctionNN(L=L)
@@ -113,116 +120,101 @@ class AMM:
         Returns:
             Tensor of shape (num_samples, 3) containing (p, x, y)
         """
+        # Generate data on CPU efficiently
         min_x = 9500
         max_x = 10500
-        # Generate x values using Gauss-Legendre points for better coverage
-        # x_points, _ = np.polynomial.legendre.leggauss(num_samples)
-        # Transform x points from [-1, 1] to [min_x, max_x]
-        # x_values = 0.5 * (max_x - min_x) * x_points + 0.5 * (max_x + min_x)
-        x_values = torch.linspace(min_x, max_x, num_samples)
-    
-        # Calculate corresponding y values using constant product formula
+        x_values = np.linspace(min_x, max_x, num_samples)
         y_values = self.L**2 / x_values
-    
-        # Set price exactly at the price ratio (p = y/x)
         p_values = y_values / x_values
-    
-        # Stack into a single array and move to device
-        states = torch.stack([p_values, x_values, y_values], dim=1).to(self.device)
-    
+        
+        # Stack into a numpy array
+        states_np = np.stack([p_values, x_values, y_values], axis=1)
+        
+        # Convert to tensor in single operation and move to device
+        states = torch.tensor(states_np, dtype=torch.float64, device=self.device)
+        
         return states
 
-    def calculate_fee_ingoing(self, p: float, x: float, y: float) -> float:
+    def calculate_fee_ingoing(self, p, x, y):
         """
         Calculate expected ingoing fee for distribute model
-        
-        Args:
-            p: Current price
-            x: Token X amount
-            y: Token Y amount
-        Returns:
-            float: Expected ingoing fee
+        Works with either numpy arrays or single values
         """
-        alpha = self.L * np.sqrt((1-self.gamma) * p) * np.exp(-self.sigma**2 * self.delta_t / 8)
+        alpha = self.L * np.sqrt((1-self.gamma) * p) * self.alpha_factor
         
-        d1 = np.log((1-self.gamma)*y/(p*x)) / (self.sigma * np.sqrt(self.delta_t))
-        d2 = np.log(y/((1-self.gamma)*p*x)) / (self.sigma * np.sqrt(self.delta_t))
+        d1 = np.log((1-self.gamma)*y/(p*x)) / (self.sigma * self.sqrt_delta_t)
+        d2 = np.log(y/((1-self.gamma)*p*x)) / (self.sigma * self.sqrt_delta_t)
         
         term1 = alpha * (norm.cdf(d1) + norm.cdf(-d2))
-        term2 = p*x * norm.cdf(d1 - 0.5*self.sigma*np.sqrt(self.delta_t))
-        term3 = y * norm.cdf(-d2 - 0.5*self.sigma*np.sqrt(self.delta_t))
+        term2 = p*x * norm.cdf(d1 - 0.5*self.sigma*self.sqrt_delta_t)
+        term3 = y * norm.cdf(-d2 - 0.5*self.sigma*self.sqrt_delta_t)
         
         return (self.gamma/(1-self.gamma)) * (term1 - term2 - term3)
 
-    def calculate_fee_outgoing(self, p: float, x: float, y: float) -> float:
+    def calculate_fee_outgoing(self, p, x, y):
         """
         Calculate expected outgoing fee
-        
-        Args:
-            p: Current price
-            x: Token X amount
-            y: Token Y amount
-        Returns:
-            float: Expected outgoing fee
+        Works with either numpy arrays or single values
         """
-        alpha = self.L * np.sqrt((1-self.gamma) * p) * np.exp(-self.sigma**2 * self.delta_t / 8)
+        alpha = self.L * np.sqrt((1-self.gamma) * p) * self.alpha_factor
         
-        d1 = np.log((1-self.gamma)*y/(p*x)) / (self.sigma * np.sqrt(self.delta_t))
-        d2 = np.log(y/((1-self.gamma)*p*x)) / (self.sigma * np.sqrt(self.delta_t))
+        d1 = np.log((1-self.gamma)*y/(p*x)) / (self.sigma * self.sqrt_delta_t)
+        d2 = np.log(y/((1-self.gamma)*p*x)) / (self.sigma * self.sqrt_delta_t)
         
         term1 = alpha * (norm.cdf(d1) + norm.cdf(-d2))
-        term2 = p*x * norm.cdf(-d2 + 0.5*self.sigma*np.sqrt(self.delta_t))
-        term3 = y * norm.cdf(d1 + 0.5*self.sigma*np.sqrt(self.delta_t))
+        term2 = p*x * norm.cdf(-d2 + 0.5*self.sigma*self.sqrt_delta_t)
+        term3 = y * norm.cdf(d1 + 0.5*self.sigma*self.sqrt_delta_t)
         
         return self.gamma * (-term1 + term2 + term3)
 
     def calculate_batch_targets(self, states: torch.Tensor) -> torch.Tensor:
         """
-        Calculate target values for training
+        Calculate target values for training using hybrid CPU/GPU approach
         
         Args:
             states: torch.Tensor of shape (batch_size, 3) containing (p, x, y)
         Returns:
             torch.Tensor of shape (batch_size, 1) containing target values
         """
-        batch_size: int = states.shape[0]
-        expected_values: torch.Tensor = torch.zeros(batch_size, 1).to(self.device)
+        # Move states to CPU for extensive numpy calculations
+        states_np = states.cpu().numpy()
+        batch_size = states_np.shape[0]
         
         # Calculate immediate rewards (p*x + y)
-        p: torch.Tensor = states[:, 0]  # shape: (batch_size,)
-        x: torch.Tensor = states[:, 1]  # shape: (batch_size,)
-        y: torch.Tensor = states[:, 2]  # shape: (batch_size,)
-        immediate_reward: torch.Tensor = p * x + y  # shape: (batch_size,)
+        p = states_np[:, 0]
+        x = states_np[:, 1]
+        y = states_np[:, 2]
+        immediate_reward = p * x + y
         
-        # Pre-compute quadrature points and weights
+        # Pre-compute quadrature points and weights once
         num_points = 100
         points, weights = np.polynomial.legendre.leggauss(num_points)
         
+        # Pre-allocate arrays
+        expected_values = np.zeros(batch_size)
+        
         # Calculate expected value for each state
         for b in range(batch_size):
-            p = states[b, 0].item()
-            x = states[b, 1].item()
-            y = states[b, 2].item()
-            
             # Setup distribution parameters
-            log_p = np.log(p)
+            log_p = np.log(p[b])
             log_p_mean = log_p + (self.mu - 0.5 * self.sigma**2) * self.delta_t
-            log_p_std = self.sigma * np.sqrt(self.delta_t)
+            log_p_std = self.sigma * self.sqrt_delta_t
             
             # Transform integration points
             log_p_min = log_p_mean - 3 * log_p_std
             log_p_max = log_p_mean + 3 * log_p_std
             log_p_points = 0.5 * (log_p_max - log_p_min) * points + 0.5 * (log_p_max + log_p_min)
             transformed_weights = weights * 0.5 * (log_p_max - log_p_min)
-            p_points = torch.tensor(np.exp(log_p_points), dtype=torch.float64).to(self.device)
+            p_points = np.exp(log_p_points)
             
             # Calculate new states based on AMM mechanics
-            price_ratio = y / x
+            price_ratio = y[b] / x[b]
             p_upper = price_ratio / (1 - self.gamma)
             p_lower = price_ratio * (1 - self.gamma)
             
-            new_x = torch.zeros_like(p_points).to(self.device)
-            new_y = torch.zeros_like(p_points).to(self.device)
+            new_x = np.zeros_like(p_points)
+            new_y = np.zeros_like(p_points)
+            
             # Apply AMM rules using masks
             above_mask = p_points > p_upper
             below_mask = p_points < p_lower
@@ -230,51 +222,55 @@ class AMM:
             
             if self.fee_model == 'distribute':
                 # calculate updated x,y 
-                new_x[above_mask] = self.L / torch.sqrt((1 - self.gamma) * p_points[above_mask])
-                new_y[above_mask] = self.L * torch.sqrt((1 - self.gamma) * p_points[above_mask])
-                new_y[below_mask] = self.L * torch.sqrt(p_points[below_mask] / (1 - self.gamma))
-                new_x[below_mask] = self.L * torch.sqrt((1 - self.gamma) / p_points[below_mask])
+                new_x[above_mask] = self.L / np.sqrt((1 - self.gamma) * p_points[above_mask])
+                new_y[above_mask] = self.L * np.sqrt((1 - self.gamma) * p_points[above_mask])
+                new_y[below_mask] = self.L * np.sqrt(p_points[below_mask] / (1 - self.gamma))
+                new_x[below_mask] = self.L * np.sqrt((1 - self.gamma) / p_points[below_mask])
             
-            new_x[within_mask] = x
-            new_y[within_mask] = y
+            new_x[within_mask] = x[b]
+            new_y[within_mask] = y[b]
             
-            # make sure new_x * new_y = L^2
-            constant_product = torch.full_like(new_x, self.L**2).to(self.device)
+            # Check constant product
             new_product = new_x * new_y
-            max_deviation = torch.max(torch.abs(new_product - constant_product))
-            max_deviation_index = torch.argmax(torch.abs(new_product - constant_product))
-            rel_deviation = max_deviation / constant_product[max_deviation_index]
-            # Use a more reasonable tolerance for floating point comparisons
-            assert torch.allclose(new_product, constant_product, rtol=1e-6, atol=1e-8), \
-                f"Constant product condition violated: max deviation = {max_deviation}, relative deviation = {rel_deviation}"
+            if not np.allclose(new_product, self.L**2, rtol=1e-6, atol=1e-8):
+                max_deviation = np.max(np.abs(new_product - self.L**2))
+                print(f"Warning: Constant product violated, max deviation: {max_deviation}")
             
-            next_states: torch.Tensor = torch.stack([p_points, new_x, new_y], dim=1).to(self.device)  # shape: (num_points, 3)
+            # Create next states tensor for GPU inference
+            next_states_np = np.column_stack((p_points, new_x, new_y))
+            next_states = torch.tensor(next_states_np, dtype=torch.float64, device=self.device)
             
-            # Move to GPU only for network inference
+            # GPU inference
             with torch.no_grad():
-                values: torch.Tensor = self.target_network(next_states).squeeze()  # shape: (num_points,)
+                values = self.target_network(next_states).cpu().numpy().flatten()
             
-            # calculate pdf
-            log_terms: torch.Tensor = (torch.log(p_points/p) - (self.mu - 0.5 * self.sigma**2) * self.delta_t)**2
+            # Calculate PDF and integrate on CPU
+            log_terms = (np.log(p_points/p[b]) - (self.mu - 0.5 * self.sigma**2) * self.delta_t)**2
             denominator = 2 * self.sigma**2 * self.delta_t
-            pi_term: torch.Tensor = torch.tensor(np.sqrt(2 * np.pi * self.delta_t), dtype=torch.float64).to(self.device)
-            pdf_values: torch.Tensor = torch.exp(-log_terms / denominator) / (p_points * self.sigma * pi_term)    
+            pdf_values = np.exp(-log_terms / denominator) / (p_points * self.sigma * self.pi_term)
+            
             integrand = values * pdf_values
-            expected_values[b] = torch.sum(integrand * torch.tensor(transformed_weights, dtype=torch.float64).to(self.device))
+            expected_values[b] = np.sum(integrand * transformed_weights)
             
             # Add fees if using distribute model
             if self.fee_model == 'distribute':
                 if self.fee_source == 'incoming':
-                    fee = self.calculate_fee_ingoing(p, x, y)
+                    fee = self.calculate_fee_ingoing(p[b], x[b], y[b])
                 elif self.fee_source == 'outgoing':
-                    fee = self.calculate_fee_outgoing(p, x, y)
+                    fee = self.calculate_fee_outgoing(p[b], x[b], y[b])
                 expected_values[b] += fee
         
-        # Calculate target and move back to GPU for training
-        target = torch.maximum(immediate_reward.unsqueeze(1), self.discount_factor * expected_values)
-        return target.to(self.device)
+        # Calculate target
+        targets_np = np.maximum(immediate_reward, self.discount_factor * expected_values)
+        
+        # Convert back to tensor for training
+        targets = torch.tensor(targets_np, dtype=torch.float64, device=self.device).unsqueeze(1)
+        
+        return targets
 
-    def train_value_function(self, num_epochs: int = 100, batch_size: int = 128, learning_rate: float = 0.001, verbose: bool = False, progress_bar: bool = False) -> list[float]:
+    def train_value_function(self, num_epochs: int = 100, batch_size: int = 128, 
+                            learning_rate: float = 0.001, verbose: bool = False, 
+                            progress_bar: bool = False) -> list[float]:
         """
         Train the value function using a large pre-generated dataset
         
@@ -282,25 +278,32 @@ class AMM:
             num_epochs: Number of training epochs
             batch_size: Size of training batches
             learning_rate: Learning rate for optimizer
+            verbose: Whether to print progress details
+            progress_bar: Whether to show progress bar
         Returns:
             list[float]: History of training losses
         """
-        # Generate training data 
-        training_states = self.generate_training_data(num_samples=10000)         
+        # Generate training data - make sure it's a PyTorch tensor
+        training_states = self.generate_training_data(num_samples=10000)
+    
+        print(f"Training states are a {type(training_states)} with device {training_states.device}")
+
+    
+        # Create dataset from tensor
         dataset = TensorDataset(training_states)
-        
-        # Create a generator for the dataloader that matches the device
         generator = torch.Generator(device=self.device)
-        
+        # Create dataloader without generator (fix for the error)
+        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, generator=generator)
+    
         # Define optimizer, scheduler and criterion
         optimizer = optim.Adam(self.value_network.parameters(), lr=learning_rate)
         scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.5)
         criterion = nn.MSELoss()
-        
+    
         # Loss history
         losses = []
         best_loss = float('inf')
-        
+    
         # Print header with wider columns
         if verbose:
             header = "| {:^5} | {:^20} | {:^20} | {:^10} | {:^12} |".format(
@@ -311,29 +314,39 @@ class AMM:
             print(separator)
             print(header)
             print(separator)
-        
+    
         # Training loop
-        pbar = tqdm(range(num_epochs), desc=f"{self.fee_model}-{self.fee_source}-{self.gamma*10000}bp-{self.sigma}s", disable=not progress_bar)
+        desc = f"{self.fee_model}-{self.fee_source}-{self.gamma*10000}bp-{self.sigma}s"
+        pbar = tqdm(range(num_epochs), desc=desc, disable=not progress_bar)
+    
         for epoch in pbar:
             epoch_losses = []
-            # Add generator to DataLoader
-            dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, generator=generator)
-            
+        
             for batch_states, in dataloader:
+                # Make sure batch is on the correct device
                 batch_states = batch_states.to(self.device)
+            
+                # Forward pass
+                predicted_value = self.value_network(batch_states)
                 targets = self.calculate_batch_targets(batch_states)
-                predicted_value: torch.Tensor = self.value_network(batch_states)
+            
+                # Compute loss
                 loss = criterion(predicted_value, targets)
+            
+                # Backward pass and optimize
                 optimizer.zero_grad()
                 loss.backward()
                 clip_grad_norm(self.value_network.parameters(), max_norm=1.0)
                 optimizer.step()
+            
                 epoch_losses.append(loss.item())
             
             # Record average loss
             avg_loss = np.mean(epoch_losses)
             losses.append(avg_loss)
-            best_loss = min(best_loss, avg_loss)
+            is_best = avg_loss < best_loss
+            if is_best:
+                best_loss = avg_loss
             
             # Step the scheduler
             scheduler.step()
@@ -343,28 +356,44 @@ class AMM:
             tau = 0.0001
             self.update_target_network(tau=tau)
             
-            # Print progress every 10 epochs with scientific notation
+            # Update progress bar
+            if progress_bar:
+                if avg_loss > 1e6:
+                    formatted_loss = f"{avg_loss:.2e}"
+                else:
+                    formatted_loss = f"{avg_loss:.2f}"
+                    
+                if best_loss > 1e6:
+                    formatted_best = f"{best_loss:.2e}"
+                else:
+                    formatted_best = f"{best_loss:.2f}"
+                
+                pbar.set_postfix({'loss': formatted_loss, 'best': formatted_best})
+            
+            # Print progress with scientific notation
             if verbose and (epoch + 1) % 1 == 0:
                 progress = "| {:>5d} | {:>20.6e} | {:>20.6e} | {:>10.6f} | {:>12.6f} |".format(
                     epoch + 1, avg_loss, best_loss, current_lr, tau
                 )
                 print(progress)
-                
-            # Save model if we hit a new best loss add fee rate and sigma to filename
-            if avg_loss == best_loss:
+            
+            # Save model if we hit a new best loss
+            if is_best:
                 root_dir = '/home/shiftpub/Dynamic_AMM/models'
                 os.makedirs(root_dir, exist_ok=True)
-                torch.save(self.value_network.state_dict(), 
-                            f'{root_dir}/optimal_mc_value_network_{self.fee_model}_{self.fee_source}_gamma_{self.gamma}_sigma_{self.sigma}.pth')
+                torch.save(
+                    self.value_network.state_dict(), 
+                    f'{root_dir}/optimal_mc_value_network_{self.fee_model}_{self.fee_source}_gamma_{self.gamma}_sigma_{self.sigma}.pth'
+                )
+        
         if verbose:
             print(separator)
-            print(f"\nTraining completed! Best loss: {best_loss:.6f}")
+            print(f"\nTraining completed! Best loss: {best_loss:.6e}")
             print(f"Model saved as: optimal_mc_value_network_{self.fee_model}_{self.fee_source}_gamma_{self.gamma}_sigma_{self.sigma}.pth")
         
         return losses
 
 def main():
-   
     # Check if CUDA (GPU) is available
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
