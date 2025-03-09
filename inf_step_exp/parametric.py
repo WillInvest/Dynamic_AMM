@@ -62,13 +62,8 @@ class ParametricValueModel:
         original_p = states_np[:, 0]
         original_x = states_np[:, 1]
         original_y = states_np[:, 2]
-        original_pool = np.round(original_p * original_x + original_y, 8)
-        expected_incoming_fee, expected_outgoing_fee, expected_pool = amm.calculate_fee(original_p, original_x, original_y)
-        discounted_pool = np.round(expected_pool * self.discount_factor, 8)
-        expected_incoming_value = np.round(expected_pool + expected_incoming_fee, 8)
-        expected_outgoing_value = np.round(expected_pool + expected_outgoing_fee, 8)
-        discounted_incoming_value = np.round(expected_incoming_value * self.discount_factor, 8)
-        discounted_outgoing_value = np.round(expected_outgoing_value * self.discount_factor, 8)
+        expected_incoming_fee = amm.calculate_fee_ingoing(original_p, original_x, original_y)
+        expected_outgoing_fee = amm.calculate_fee_outgoing(original_p, original_x, original_y)
 
         # Create DataFrame with initial states
         states_df = pd.DataFrame({
@@ -76,19 +71,16 @@ class ParametricValueModel:
             'p': states_np[:, 0],
             'x': states_np[:, 1],
             'y': states_np[:, 2],
-            'gamma': self.gamma,
-            'mu': self.mu,
-            'sigma': self.sigma,
-            'original_pool': original_pool,
+            'immediate_reward': states_np[:, 0] * states_np[:, 1] + states_np[:, 2],
+            'sqrt_p': np.sqrt(states_np[:, 0]),
             'expected_incoming_fee': expected_incoming_fee,
-            'expected_outgoing_fee': expected_outgoing_fee,
-            'expected_pool': expected_pool,
-            'discounted_pool': discounted_pool,
-            'expected_incoming_value': expected_incoming_value,
-            'expected_outgoing_value': expected_outgoing_value,
-            'discounted_incoming_value': discounted_incoming_value,
-            'discounted_outgoing_value': discounted_outgoing_value
+            'expected_outgoing_fee': expected_outgoing_fee
         })
+        
+        # Add price bounds for AMM mechanics
+        states_df['price_ratio'] = states_df['y'] / states_df['x']
+        states_df['p_upper'] = states_df['price_ratio'] / (1 - self.gamma)
+        states_df['p_lower'] = states_df['price_ratio'] * (1 - self.gamma)
         
         # Store AMM for later use
         self.amm = amm
@@ -262,7 +254,7 @@ class ParametricValueModel:
         
         return expected_values
     
-    def generate_parametric_data(self, L, num_samples=100, num_integration_points=500):
+    def generate_parametric_data(self, Cin, Cout, num_samples=100, num_integration_points=500):
         """
         Generate data for parametric model using trapezoidal integration
         
@@ -297,11 +289,8 @@ class ParametricValueModel:
             
             # Step 5: Calculate expected new value using trapezoidal integration
             new_prices = future_states['new_prices']
-            new_x = future_states['new_x']
-            new_y = future_states['new_y']
-            
-            future_values_in = new_prices * new_x + new_y
-            future_values_out = new_prices * new_x + new_y
+            future_values_in = Cin * np.sqrt(new_prices)
+            future_values_out = Cout * np.sqrt(new_prices)
             expected_new_value_in = np.sum(future_values_in * weights)
             expected_new_value_out = np.sum(future_values_out * weights)
             
@@ -311,8 +300,8 @@ class ParametricValueModel:
             
             # Step 7: Calculate metrics with shortcut names
             current_pool = row['p'] * row['x'] + row['y']
-            current_value_in = row['p'] * row['x'] + row['y']
-            current_value_out = row['p'] * row['x'] + row['y']
+            current_value_in = Cin * np.sqrt(row['p'])
+            current_value_out = Cout * np.sqrt(row['p'])
 
             # Calculate discounted values
             discounted_in_value = self.discount_factor * expected_in
@@ -347,12 +336,104 @@ class ParametricValueModel:
         
         return final_df
     
-   
+    def find_optimal_c_in_out(self, num_samples=100, num_integration_points=500, initial_c=1.0):
+        """
+        Find the optimal Cin and Cout values that separately minimize SE_In and SE_Out
+        
+        Parameters:
+        -----------
+        num_samples : int
+            Number of initial states to sample
+        num_integration_points : int
+            Number of integration points
+        initial_c : float
+            Initial guess for both Cin and Cout
+            
+        Returns:
+        --------
+        optimal_cin : float
+            Optimal value for Cin that minimizes SE_In
+        optimal_cout : float
+            Optimal value for Cout that minimizes SE_Out
+        optimal_data_in : DataFrame
+            DataFrame with optimal results using Cin
+        optimal_data_out : DataFrame
+            DataFrame with optimal results using Cout
+        """
+        from scipy.optimize import minimize
+        
+        # Define the objective function for minimizing SE_In
+        def objective_in(c):
+            # Generate data with the given C value
+            data = self.generate_parametric_data(
+                Cin=c[0],
+                Cout=1,
+                num_samples=num_samples,
+                num_integration_points=num_integration_points
+            )
+            
+            # Return average SE_In
+            avg_se_in = data['SE_In'].mean()
+            print(f"Trying Cin = {c[0]:.6f}, Avg SE_In = {avg_se_in:.6f}")
+            return avg_se_in
+        
+        # Define the objective function for minimizing SE_Out
+        def objective_out(c):
+            # Generate data with the given C value
+            data = self.generate_parametric_data(
+                Cin=1,
+                Cout=c[0],
+                num_samples=num_samples,
+                num_integration_points=num_integration_points
+            )
+            
+            # Return average SE_Out
+            avg_se_out = data['SE_Out'].mean()
+            print(f"Trying Cout = {c[0]:.6f}, Avg SE_Out = {avg_se_out:.6f}")
+            return avg_se_out
+        
+        # Run the optimization for Cin (minimizing SE_In)
+        print("Starting optimization to find optimal Cin (minimizing SE_In)...")
+        result_in = minimize(
+            objective_in,
+            x0=[initial_c],
+            method='Nelder-Mead',
+            options={'xtol': 1e-6, 'disp': True}
+        )
+        
+        # Run the optimization for Cout (minimizing SE_Out)
+        print("\nStarting optimization to find optimal Cout (minimizing SE_Out)...")
+        result_out = minimize(
+            objective_out,
+            x0=[initial_c],
+            method='Nelder-Mead',
+            options={'xtol': 1e-6, 'disp': True}
+        )
+        
+        # Generate final data with optimal Cin and Cout
+        optimal_cin = result_in.x[0]
+        optimal_cout = result_out.x[0]
+        
+        optimal_data = self.generate_parametric_data(
+            Cin=optimal_cin,
+            Cout=optimal_cout,
+            num_samples=num_samples,
+            num_integration_points=num_integration_points
+        )
+        
+        print(f"\nOptimization complete!")
+        print(f"Optimal Cin = {optimal_cin:.6f} (minimizes SE_In)")
+        print(f"Optimal Cout = {optimal_cout:.6f} (minimizes SE_Out)")
+        print(f"Final average SE_In with Cin = {optimal_data['SE_In'].mean():.6f}")
+        print(f"Final average SE_Out with Cin = {optimal_data['SE_Out'].mean():.6f}")
+
+        
+        return optimal_cin, optimal_cout, optimal_data
         
 
 def main():
     # Initialize the parametric value model
-    mu = 00
+    mu = 0.1
     sigma = 0.5
     gamma = 0.03
     delta_t = 1
@@ -363,7 +444,11 @@ def main():
     # Find separate optimal Cin and Cout to minimize SE_In and SE_Out
     # using trapezoidal integration
     print("Using trapezoidal integration to find optimal C values...")
-    data = model.generate_parametric_data(L=1000, num_samples=100, num_integration_points=500)
+    optimal_cin, optimal_cout, optimal_data = model.find_optimal_c_in_out(
+        num_samples=100,
+        num_integration_points=500,
+        initial_c=1.0
+    )
     
     # Select columns to display for dual C results
     display_columns = [
@@ -377,10 +462,10 @@ def main():
     
     # Print the dual C results
     print("\nFinal results with optimal Cin and Cout:")
-    print(data[display_columns].head().to_markdown())
+    print(optimal_data[display_columns].head().to_markdown())
     
     # Save results to CSV
-    data.to_csv('optimal_dual_c_results.csv', index=False)
+    optimal_data.to_csv('optimal_dual_c_results.csv', index=False)
     print("Results saved to 'optimal_dual_c_results.csv'")
 
 if __name__ == "__main__":

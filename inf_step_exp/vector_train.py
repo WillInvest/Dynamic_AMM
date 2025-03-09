@@ -33,7 +33,7 @@ class ValueFunctionNN(nn.Module):
         )
         
         # nn.init.normal_(self.network[-1].weight, mean=0.0, std=0.01)
-        nn.init.constant_(self.network[-1].bias, self.L)  # Start near the typical reward
+        # nn.init.constant_(self.network[-1].bias)  # Start near the typical reward
     
     def normalize_input(self, state: torch.Tensor) -> torch.Tensor:
         """
@@ -94,8 +94,8 @@ class AMM:
         self.fee_model = fee_model
         self.fee_source = fee_source
         self.discount_factor = np.exp(-self.mu * self.delta_t)
-        
         # Initialize neural network with L parameter
+        # self.value_network = self.load_model()
         self.value_network = ValueFunctionNN(L=L)
         self.target_network = ValueFunctionNN(L=L)
         self.target_network.load_state_dict(self.value_network.state_dict())  # Initialize with same weights
@@ -103,6 +103,32 @@ class AMM:
         self.value_network.to(device)
         self.target_network.to(device)
         
+    def load_model(self, device='cuda'):
+        """
+        Load a trained model with proper error handling
+    
+        Args:
+            model_path: Path to the model file
+            device: Device to load the model on
+    
+        Returns:
+            Loaded model or None if loading failed
+        """
+        
+        if self.fee_source == 'incoming':
+            model_path = f'/home/shiftpub/Dynamic_AMM/pretrained_models/pretrained_immediate_distribute_incoming.pth'
+        else:
+            model_path = f'/home/shiftpub/Dynamic_AMM/pretrained_models/pretrained_immediate_distribute_outgoing.pth'
+
+        # Create a new model instance
+        model = ValueFunctionNN(L=self.L).to(device)
+
+        # Load only the state dictionary (fixes the FutureWarning)
+        state_dict = torch.load(model_path, map_location=torch.device(device), weights_only=True)
+        model.load_state_dict(state_dict)
+
+        return model
+
     def update_target_network(self, tau=0.01):
         """Soft update target network: θ_target = τ*θ_current + (1-τ)*θ_target"""
         for target_param, current_param in zip(self.target_network.parameters(), self.value_network.parameters()):
@@ -167,7 +193,7 @@ class AMM:
 
     def calculate_batch_targets(self, states: torch.Tensor) -> torch.Tensor:
         """
-        Calculate target values for training using vectorized approach
+        Calculate target values for training using vectorized approach with trapezoidal integration
     
         Args:
             states: torch.Tensor of shape (batch_size, 3) containing (p, x, y)
@@ -177,30 +203,48 @@ class AMM:
         # Move states to CPU for extensive numpy calculations
         states_np = states.cpu().numpy()
         batch_size = states_np.shape[0]
-    
+
         # Extract state components
         p = states_np[:, 0]
         x = states_np[:, 1]
         y = states_np[:, 2]
-        immediate_reward = (p * x + y) # / self.L
-    
-        # Pre-compute quadrature points and weights once
-        num_points = 500
-        points, weights = np.polynomial.legendre.leggauss(num_points)
-    
-        # Setup distribution parameters
+        immediate_reward = (p * x + y)  # Keep the immediate reward as is
+
+        # Setup integration parameters
+        num_points = 500  # Number of points for integration
+        
+        # Generate random samples from log-normal distribution
         log_p = np.log(p)
-        log_p_mean = log_p[:, np.newaxis] + (self.mu - 0.5 * self.sigma**2) * self.delta_t
+        drift = (self.mu - 0.5 * self.sigma**2) * self.delta_t
         log_p_std = self.sigma * np.sqrt(self.delta_t)
     
-        # Transform integration points for all batch items at once
-        log_p_min = log_p_mean - 3 * log_p_std
-        log_p_max = log_p_mean + 3 * log_p_std
-        # Reshape for broadcasting: (batch_size, num_points)
-        log_p_points = 0.5 * (log_p_max - log_p_min) * points[np.newaxis, :] + 0.5 * (log_p_max + log_p_min)
-        transformed_weights = weights[np.newaxis, :] * 0.5 * (log_p_max - log_p_min)
+        # Generate samples for all batch items at once
+        # Shape: (batch_size, num_samples)
+        # set seed
+        np.random.seed(42)
+        log_p_points = np.random.normal(
+            loc=log_p.reshape(-1, 1) + drift, 
+            scale=log_p_std, 
+            size=(batch_size, num_points)
+        )
     
-        # Exponential to get price points (batch_size, num_points)
+        # # Set up the log-price range for integration
+        # # We'll integrate over a range centered at the expected future log price
+        # log_p = np.log(p)
+        # drift = (self.mu - 0.5 * self.sigma**2) * self.delta_t
+        # log_p_mean = log_p + drift
+        # log_p_std = self.sigma * np.sqrt(self.delta_t)
+    
+        # # Define integration range: mean ± 3 standard deviations
+        # log_p_min = log_p_mean - 0.01 * log_p_std
+        # log_p_max = log_p_mean + 0.01 * log_p_std
+    
+        # # Create evenly spaced points for trapezoidal integration
+        # # Shape: (batch_size, num_points)
+        # log_p_points = np.linspace(log_p_min, log_p_max, num_points).T
+        # # log_p_points = np.log(p).reshape(-1, 1)
+    
+        # Calculate corresponding prices
         p_points = np.exp(log_p_points)
     
         # Calculate new states based on AMM mechanics
@@ -212,21 +256,20 @@ class AMM:
         p_upper = p_upper[:, np.newaxis]  # (batch_size, 1)
         p_lower = p_lower[:, np.newaxis]  # (batch_size, 1)
     
-        # Initialize arrays for new x, y values with broadcast dimensions
+        # Initialize arrays for new x, y values
         new_x = np.zeros((batch_size, num_points))
         new_y = np.zeros((batch_size, num_points))
     
-        # Create masks for the conditions (batch_size, num_points)
+        # Create masks for the conditions
         above_mask = p_points > p_upper
         below_mask = p_points < p_lower
         within_mask = ~(above_mask | below_mask)
     
         if self.fee_model == 'distribute':
-            # Vectorized calculations for above mask
+            # Vectorized calculations for each price region
             new_x[above_mask] = self.L / np.sqrt((1 - self.gamma) * p_points[above_mask])
             new_y[above_mask] = self.L * np.sqrt((1 - self.gamma) * p_points[above_mask])
-        
-            # Vectorized calculations for below mask
+    
             new_x[below_mask] = self.L * np.sqrt((1 - self.gamma) / p_points[below_mask])
             new_y[below_mask] = self.L * np.sqrt(p_points[below_mask] / (1 - self.gamma))
     
@@ -235,17 +278,10 @@ class AMM:
         y_expanded = y[:, np.newaxis]  # (batch_size, 1)
     
         # Fill in 'within' values
-        new_x[within_mask] = x_expanded.repeat(num_points, axis=1)[within_mask]
-        new_y[within_mask] = y_expanded.repeat(num_points, axis=1)[within_mask]
+        new_x[within_mask] = np.repeat(x_expanded, num_points, axis=1)[within_mask]
+        new_y[within_mask] = np.repeat(y_expanded, num_points, axis=1)[within_mask]
     
-        # Check constant product (optional, can be removed for performance)
-        new_product = new_x * new_y
-        if not np.allclose(new_product, self.L**2, rtol=1e-6, atol=1e-8):
-            max_deviation = np.max(np.abs(new_product - self.L**2))
-            print(f"Warning: Constant product violated, max deviation: {max_deviation}")
-    
-        # Reshape for processing with target network
-        # Flatten batch dimension and points dimension, then add feature dimension
+        # Prepare states for network evaluation
         next_states_flat = np.zeros((batch_size * num_points, 3))
         next_states_flat[:, 0] = p_points.flatten()
         next_states_flat[:, 1] = new_x.flatten()
@@ -253,41 +289,58 @@ class AMM:
     
         # Convert to tensor for GPU inference
         next_states = torch.tensor(next_states_flat, dtype=torch.float64, device=self.device)
-    
-        # GPU inference
+        next_immediate_reward = (p_points * new_x + new_y)
+        # Get values from target network
         with torch.no_grad():
             flat_values = self.target_network(next_states).cpu().numpy()
-            pred_values = self.value_network(next_states).cpu().numpy()
-    
+            predicted_values = self.value_network(next_states).cpu().numpy()
+            # target_predicted_values = self.target_network(states).cpu().numpy()
+            
+        next_values = np.maximum(next_immediate_reward.flatten(), flat_values.flatten())
         # Reshape back to (batch_size, num_points)
-        values = flat_values.reshape(batch_size, num_points)
+        values = next_values.reshape(batch_size, num_points)
+        expected_values = np.mean(values, axis=1)
+        # # Calculate the PDF of log-normal distribution
+        # # This represents the probability density of each future price
+        # variance = self.sigma**2 * self.delta_t
+        # log_terms = (log_p_points - log_p[:, np.newaxis] - drift)**2 / (2 * variance)
+        # pdf_values = np.exp(-log_terms) / (p_points * self.sigma * np.sqrt(2 * np.pi * self.delta_t))
+        # pdf_sum = np.sum(pdf_values, axis=1)
+        # normalized_pdf = pdf_values / pdf_sum[:, np.newaxis]
+        # # Compute integrand: value function times probability density
+        # integrand = values * normalized_pdf
     
-        # Calculate PDF vectorized
-        log_terms = (log_p_points - log_p[:, np.newaxis] - (self.mu - 0.5 * self.sigma**2) * self.delta_t)**2
-        denominator = 2 * self.sigma**2 * self.delta_t
-        pdf_values = np.exp(-log_terms / denominator) / (p_points * self.sigma * np.sqrt(2 * np.pi * self.delta_t))
+        # # Perform trapezoidal integration
+        # # The step size for each batch item
+        # dx = (np.exp(log_p_max) - np.exp(log_p_min)) / (num_points - 1)
     
-        # Vectorized integration
-        integrand = values * pdf_values
-        expected_values = np.sum(integrand * transformed_weights, axis=1)
+        # # Trapezoidal rule: 0.5 * dx * (f(x₀) + 2f(x₁) + 2f(x₂) + ... + 2f(xₙ₋₁) + f(xₙ))
+        # # Apply weights: first and last points get weight 1, others get weight 2
+        # weights = np.ones(num_points)
+        # weights[1:-1] = 2.0
     
-        # Add fees if using distribute modelx
+        # Multiply by weights, sum, and scale by dx/2
+        # expected_values = np.sum(integrand * weights[np.newaxis, :], axis=1) #* (dx / 2)
+        # expected_values = flat_values
+        
+        # Add fees if using distribute model
         if self.fee_model == 'distribute':
             if self.fee_source == 'incoming':
                 fees = self.calculate_fee_ingoing(p, x, y)
             elif self.fee_source == 'outgoing':
                 fees = self.calculate_fee_outgoing(p, x, y)
-            expected_values += fees
-    
-        # Calculate target
-        targets_np = np.maximum(immediate_reward, self.discount_factor * expected_values)
-    
-        # Convert back to tensor for training
-        targets = torch.tensor(targets_np * self.L, dtype=torch.float64, device=self.device).unsqueeze(1)
-    
-        return targets
+            post_fee_values = expected_values + fees
+            
+        num_future_better = np.sum(self.discount_factor*post_fee_values > immediate_reward)
 
-    def train_value_function(self, tau: float = 0.01, num_epochs: int = 100, batch_size: int = 128, 
+        targets_np = np.maximum(immediate_reward, self.discount_factor * expected_values)
+        # targets_np = np.maximum(immediate_reward, self.discount_factor * predicted_values)
+        # Convert back to tensor for training
+        targets = torch.tensor(targets_np, dtype=torch.float64, device=self.device).unsqueeze(1)
+    
+        return targets, num_future_better
+
+    def train_value_function(self, num_epochs: int = 100, batch_size: int = 128, 
                              learning_rate: float = 0.001, verbose: bool = False, 
                              progress_bar: bool = False, patience: int = 10) -> list[float]:
         """
@@ -303,17 +356,15 @@ class AMM:
             list[float]: History of training losses
         """
         # Generate training data - make sure it's a PyTorch tensor
-        training_states = self.generate_training_data(num_samples=1)
-
-        print(f"Training states are a {type(training_states)} with device {training_states.device}")
-
+        training_states = self.generate_training_data(num_samples=10000)
+        
         # Create dataset from tensor
         dataset = TensorDataset(training_states)
         generator = torch.Generator(device=self.device)
 
         # Define optimizer, scheduler and criterion
         optimizer = optim.Adam(self.value_network.parameters(), lr=learning_rate)
-        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.95)
+        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.95)
         criterion = nn.MSELoss()
 
         # Loss history
@@ -323,11 +374,17 @@ class AMM:
         # Early stopping counter
         epochs_without_improvement = 0
         best_model_state = None
+        p = [1, 1.1]
+        x = [1000, 1000]
+        y = [1000, 1100]
+        state = np.stack([p, x, y], axis=1)
+        device = torch.device('cuda')
+        sample_state = torch.tensor(state, dtype=torch.float64, device=device)
 
         # Print header with wider columns
         if verbose:
-            header = "| {:^5} | {:^20} | {:^20} | {:^10} | {:^12} | {:^8} |".format(
-                "Epoch", "Loss", "Min Loss", "LR", "Tau", "No Impr."
+            header = "| {:^5} | {:^20} | {:^20} | {:^10} | {:^12} | {:^8} | {:^8} |".format(
+                "Epoch", "Loss", "Min Loss", "LR", "Tau", "No Impr.", "Samp Pred."
             )
             separator = "-" * len(header)
             print("\nTraining Progress:")
@@ -346,10 +403,10 @@ class AMM:
             for batch_states, in dataloader:
                 # Make sure batch is on the correct device
                 batch_states = batch_states.to(self.device)
-        
+                
                 # Forward pass
                 predicted_value = self.value_network(batch_states)
-                targets = self.calculate_batch_targets(batch_states)
+                targets, num_future_better = self.calculate_batch_targets(batch_states)
         
                 # Compute loss
                 loss = criterion(predicted_value, targets)
@@ -368,6 +425,7 @@ class AMM:
         
             # Check if this is the best loss so far
             if avg_loss < best_loss:
+                
                 best_loss = avg_loss
                 epochs_without_improvement = 0
                 # Save the best model state
@@ -382,6 +440,7 @@ class AMM:
             else:
                 epochs_without_improvement += 1
                 # if epochs_without_improvement >= patience:
+                    # print(f"\nEarly stopping triggered after {epoch + 1} epochs without improvement")
                 #     if verbose:
                 #         print(f"\nEarly stopping triggered after {epoch + 1} epochs without improvement")
                 #     break
@@ -391,9 +450,8 @@ class AMM:
             current_lr = scheduler.get_last_lr()[0]
         
             # Update target network
-            tau = scheduler.get_last_lr()[0] * 10
+            tau = scheduler.get_last_lr()[0] * 0.1
             self.update_target_network(tau=tau)
-        
             # Update progress bar
             if progress_bar:
                 if avg_loss > 1e6:
@@ -414,8 +472,8 @@ class AMM:
         
             # Print progress with scientific notation
             if verbose and (epoch + 1) % 1 == 0:
-                progress = "| {:>5d} | {:>20.6e} | {:>20.6e} | {:>10.6f} | {:>12.6f} | {:>8d} |".format(
-                    epoch + 1, avg_loss, best_loss, current_lr, tau, epochs_without_improvement
+                progress = "| {:>5d} | {:>20.6e} | {:>20.6e} | {:>10.6f} | {:>12.6f} | {:>8d} | {:>8.6f} |".format(
+                    epoch + 1, avg_loss, best_loss, current_lr, tau, epochs_without_improvement, self.value_network(sample_state)[0].item()
                 )
                 print(progress)
     
@@ -441,8 +499,8 @@ def main():
 
     # Initialize AMM with different fee models
     for fee_source in ['incoming', 'outgoing']:
-        for gamma in [0.0005]:
-            for sigma in [1]:
+        for gamma in [0.05]:
+            for sigma in [0.5]:
                 distribute_amm = AMM(
                     L=1000,
                     gamma=gamma,
@@ -457,9 +515,8 @@ def main():
                 # Train both models
                 distribute_losses = distribute_amm.train_value_function(
                     num_epochs=1000,
-                    batch_size=1,
-                    learning_rate=0.0003,
-                    tau=0.001,
+                    batch_size=256,
+                    learning_rate=0.003,
                     verbose=True,
                     progress_bar=False
                 )
