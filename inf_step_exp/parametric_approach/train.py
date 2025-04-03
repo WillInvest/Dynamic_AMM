@@ -5,7 +5,7 @@ import pandas as pd
 from scipy.stats import norm
 from scipy.optimize import minimize
 from scipy.integrate import quad
-from CPMM import AMM
+from inf_step_exp.parametric_approach.CPMM import AMM
 
 class ParametricValueModel:
     def __init__(self, mu, sigma, gamma, delta_t=1):

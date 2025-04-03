@@ -32,10 +32,10 @@ def subplot_comparison(path: str, metric: str):
 
     # Line styles for each combination
     styles = {
-        (1, 'in'): ('black', '-', 'Step 1 incoing'),
-        (1, 'out'): ('red', '-', 'Step 1 Outgoing'),
-        (2, 'in'): ('black', '--', 'Step 2 incoing'),
-        (2, 'out'): ('red', '--', 'Step 2 Outgoing')
+        (1, 'in'): ('black', '-', 'Step 1 incoming'),
+        (1, 'out'): ('red', '-', 'Step 1 outgoing'),
+        (2, 'in'): ('black', '--', 'Step 2 incoming'),
+        (2, 'out'): ('red', '--', 'Step 2 outgoing')
     }
     
     # Calculate number of figures needed for 5x5 grid

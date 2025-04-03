@@ -8,7 +8,7 @@ from scipy.integrate import quad
 from CPMM import AMM
 
 class ParametricValueModel:
-    def __init__(self, mu, sigma, gamma, delta_t=1):
+    def __init__(self, L, mu, sigma, gamma, delta_t=0.0001):
         """
         Initialize the parametric value model
         
@@ -28,8 +28,15 @@ class ParametricValueModel:
         self.gamma = gamma
         self.delta_t = delta_t
         self.discount_factor = np.exp(-mu * delta_t)
-        
-    def generate_raw_data(self, L, num_samples=100):
+        self.L = L
+        self.amm = AMM(
+            L=L,
+            gamma=gamma,
+            sigma=sigma,
+            delta_t=delta_t,
+            mu=mu
+        )
+    def generate_raw_data(self, k=0, num_samples=1):
         """
         Generate initial states
         
@@ -43,27 +50,15 @@ class ParametricValueModel:
         states_df : DataFrame
             DataFrame with initial states
         """
-        # Create an AMM instance
-        amm = AMM(
-            L=L,
-            gamma=self.gamma,
-            sigma=self.sigma,
-            delta_t=self.delta_t,
-            mu=self.mu,
-            fee_model='distribute',
-            fee_source='outgoing',
-            device='cuda' if torch.cuda.is_available() else 'cpu'
-        )
         
         # Generate initial states
-        states = amm.generate_training_data(num_samples=num_samples)
+        states = self.amm.generate_training_data(k=k,num_samples=num_samples)
         states_np = states.cpu().numpy()
         # Calculate expected fees using original state values
         original_p = states_np[:, 0]
         original_x = states_np[:, 1]
         original_y = states_np[:, 2]
-        expected_incoming_fee = amm.calculate_fee_ingoing(original_p, original_x, original_y)
-        expected_outgoing_fee = amm.calculate_fee_outgoing(original_p, original_x, original_y)
+        expected_incoming_fee, expected_outgoing_fee, pool_value = self.amm.calculate_fee(original_p, original_x, original_y)
 
         # Create DataFrame with initial states
         states_df = pd.DataFrame({
@@ -71,23 +66,14 @@ class ParametricValueModel:
             'p': states_np[:, 0],
             'x': states_np[:, 1],
             'y': states_np[:, 2],
-            'immediate_reward': states_np[:, 0] * states_np[:, 1] + states_np[:, 2],
-            'sqrt_p': np.sqrt(states_np[:, 0]),
-            'expected_incoming_fee': expected_incoming_fee,
-            'expected_outgoing_fee': expected_outgoing_fee
+            'current_pool': states_np[:, 0] * states_np[:, 1] + states_np[:, 2],
+            'fin': expected_incoming_fee,
+            'fout': expected_outgoing_fee
         })
-        
-        # Add price bounds for AMM mechanics
-        states_df['price_ratio'] = states_df['y'] / states_df['x']
-        states_df['p_upper'] = states_df['price_ratio'] / (1 - self.gamma)
-        states_df['p_lower'] = states_df['price_ratio'] * (1 - self.gamma)
-        
-        # Store AMM for later use
-        self.amm = amm
         
         return states_df
     
-    def generate_trapezoidal_points(self, num_points=500):
+    def generate_trapezoidal_points(self, initial_p, num_points=500):
         """
         Generate evenly-spaced points and weights for trapezoidal integration
         
@@ -104,31 +90,32 @@ class ParametricValueModel:
             Integration weights
         """
         # Calculate drift and diffusion for log price
+        x0 = np.log(initial_p)
         drift = (self.mu - 0.5 * self.sigma**2) * self.delta_t
         diffusion = self.sigma * np.sqrt(self.delta_t)
         
         # Define integration range (±5 standard deviations around drift)
-        std_range = 5
-        lower_bound = drift - std_range * diffusion
-        upper_bound = drift + std_range * diffusion
+        std_range = 3
+        lower_bound = x0 + drift - std_range * diffusion
+        upper_bound = x0 + drift + std_range * diffusion
         
         # Generate evenly spaced points
-        points = np.linspace(lower_bound, upper_bound, num_points)
+        points = np.linspace(lower_bound, upper_bound, int(num_points))
         
         # Calculate weights for trapezoidal rule
         # For trapezoid rule, all interior points have equal weight, and the endpoints have half weight
         dx = (upper_bound - lower_bound) / (num_points - 1)
-        weights = np.ones(num_points) * dx
-        weights[0] = weights[-1] = dx / 2
+        raw_weights = np.ones(num_points) * dx
+        raw_weights[0] = raw_weights[-1] = dx / 2
         
         # Calculate the probability density function (PDF) for each point
         # since we're doing a weighted integral against the lognormal distribution
-        pdf = np.exp(-(points - drift)**2 / (2 * diffusion**2)) / (diffusion * np.sqrt(2 * np.pi))
+        pdf = np.exp(-(points - (x0+drift))**2 / (2 * diffusion**2)) / (diffusion * np.sqrt(2 * np.pi))
         
         # Multiply weights by PDF values
-        weights = weights * pdf
+        weights = raw_weights * pdf
         
-        return points, weights
+        return np.exp(points), raw_weights, pdf, weights
     
     def calculate_future_states(self, initial_state, integration_points):
         """
@@ -149,11 +136,11 @@ class ParametricValueModel:
         initial_p = initial_state['p']
         initial_x = initial_state['x']
         initial_y = initial_state['y']
-        p_upper = initial_state['p_upper']
-        p_lower = initial_state['p_lower']
+        p_upper = initial_p / (1 - self.gamma)
+        p_lower = initial_p * (1 - self.gamma)
         
         # Calculate new prices using log-normal model
-        new_prices = initial_p * np.exp(integration_points)
+        new_prices = integration_points
         
         # Initialize arrays for new x, y values
         new_x = np.zeros_like(new_prices)
@@ -165,11 +152,11 @@ class ParametricValueModel:
         within_mask = ~(above_mask | below_mask)
         
         # Calculate new x, y values based on conditions
-        new_x[above_mask] = self.amm.L / np.sqrt((1 - self.gamma) * new_prices[above_mask])
-        new_y[above_mask] = self.amm.L * np.sqrt((1 - self.gamma) * new_prices[above_mask])
+        new_x[above_mask] = self.L / np.sqrt((1 - self.gamma) * new_prices[above_mask])
+        new_y[above_mask] = self.L * np.sqrt((1 - self.gamma) * new_prices[above_mask])
         
-        new_x[below_mask] = self.amm.L * np.sqrt((1 - self.gamma) / new_prices[below_mask])
-        new_y[below_mask] = self.amm.L * np.sqrt(new_prices[below_mask] / (1 - self.gamma))
+        new_x[below_mask] = self.L * np.sqrt((1 - self.gamma) / new_prices[below_mask])
+        new_y[below_mask] = self.L * np.sqrt(new_prices[below_mask] / (1 - self.gamma))
         
         new_x[within_mask] = initial_x
         new_y[within_mask] = initial_y
@@ -210,8 +197,8 @@ class ParametricValueModel:
         
         # Calculate continuation values (the future value plus fees)
         # Uses the expected fees calculated based on original p, x, y
-        continuation_in = fees['expected_incoming_fee'] + future_values
-        continuation_out = fees['expected_outgoing_fee'] + future_values
+        continuation_in = fees['fin'] + future_values
+        continuation_out = fees['fout'] + future_values
         
         continuation_values = {
             'continuation_in': continuation_in,
@@ -254,7 +241,7 @@ class ParametricValueModel:
         
         return expected_values
     
-    def generate_parametric_data(self, Cin, Cout, num_samples=100, num_integration_points=500):
+    def generate_parametric_data(self, Cin, Cout, k=0, num_samples=100, num_integration_points=500):
         """
         Generate data for parametric model using trapezoidal integration
         
@@ -274,19 +261,15 @@ class ParametricValueModel:
         final_df : DataFrame
             DataFrame with initial states and expected future values
         """
-        # Step 1: Generate raw data
-        raw_data = self.generate_raw_data(num_samples)
-        
-        # Step 2: Generate trapezoidal points and weights
-        points, weights = self.generate_trapezoidal_points(num_integration_points)
-        
-        # Step 3-7: Process each state to get expected future values
+        raw_data = self.generate_raw_data(k=k, num_samples=num_samples)
         expected_values = []
-        
+        se = []
         for _, row in raw_data.iterrows():
             # Step 3: Calculate future states
+            points, raw_weights, pdf, weights = self.generate_trapezoidal_points(row['p'], num_integration_points)
             future_states = self.calculate_future_states(row, points)
-            
+            future_states['weights'] = weights
+            future_states['pdf'] = pdf
             # Step 5: Calculate expected new value using trapezoidal integration
             new_prices = future_states['new_prices']
             future_values_in = Cin * np.sqrt(new_prices)
@@ -295,9 +278,8 @@ class ParametricValueModel:
             expected_new_value_out = np.sum(future_values_out * weights)
             
             # Calculate expected values
-            expected_in = row['expected_incoming_fee'] + expected_new_value_in
-            expected_out = row['expected_outgoing_fee'] + expected_new_value_out
-            
+            expected_in = row['fin'] + expected_new_value_in
+            expected_out = row['fout'] + expected_new_value_out
             # Step 7: Calculate metrics with shortcut names
             current_pool = row['p'] * row['x'] + row['y']
             current_value_in = Cin * np.sqrt(row['p'])
@@ -308,35 +290,34 @@ class ParametricValueModel:
             discounted_out_value = self.discount_factor * expected_out
             
             # Calculate squared errors
-            # se_in = np.sqrt((current_value_in - discounted_in_value)**2)
-            # se_out = np.sqrt((current_value_out - discounted_out_value)**2)
-            se_in = np.sqrt((current_value_in - max(current_pool, discounted_in_value))**2)
-            se_out = np.sqrt((current_value_out - max(current_pool, discounted_out_value))**2)
+            se_max_in = np.sqrt((current_value_in - max(current_pool, discounted_in_value))**2)
+            se_max_out = np.sqrt((current_value_out - max(current_pool, discounted_out_value))**2)
+            se_cont_in = np.sqrt((current_value_in - discounted_in_value)**2)
+            se_cont_out = np.sqrt((current_value_out - discounted_out_value)**2)
             
             expected_values.append({
                 'state_idx': row['state_idx'],
-                'PV0': current_pool,
                 'V0_in': current_value_in,
                 'V0_out': current_value_out,
-                'Ein': row['expected_incoming_fee'],
-                'Eout': row['expected_outgoing_fee'],
-                'EV_in': expected_new_value_in,
-                'EV_out': expected_new_value_out,
-                'Vd_in': discounted_in_value,
-                'Vd_out': discounted_out_value,
-                'SE_In': se_in,
-                'SE_Out': se_out
+                'EDV_in': discounted_in_value,
+                'EDV_out': discounted_out_value
             })
-        
+            se.append({
+                'SE_max_in': se_max_in,
+                'SE_max_out': se_max_out,
+                'SE_cont_in': se_cont_in,
+                'SE_cont_out': se_cont_out
+            })
+            
         # Create DataFrame with expected values
         expected_df = pd.DataFrame(expected_values)
-        
+        se = pd.DataFrame(se, columns=['SE_max_in', 'SE_max_out', 'SE_cont_in', 'SE_cont_out'])
         # Merge with raw data
         final_df = pd.merge(raw_data, expected_df, on='state_idx')
         
-        return final_df
+        return final_df, se
     
-    def find_optimal_c_in_out(self, num_samples=100, num_integration_points=500, initial_c=1.0):
+    def find_optimal_c_in_out(self, k=0, num_samples=100, num_integration_points=500, initial_c=1.0, maximum=True):
         """
         Find the optimal Cin and Cout values that separately minimize SE_In and SE_Out
         
@@ -365,108 +346,118 @@ class ParametricValueModel:
         # Define the objective function for minimizing SE_In
         def objective_in(c):
             # Generate data with the given C value
-            data = self.generate_parametric_data(
+            data, se = self.generate_parametric_data(
                 Cin=c[0],
                 Cout=1,
+                k=k,
                 num_samples=num_samples,
                 num_integration_points=num_integration_points
             )
             
             # Return average SE_In
-            avg_se_in = data['SE_In'].mean()
-            print(f"Trying Cin = {c[0]:.6f}, Avg SE_In = {avg_se_in:.6f}")
+            if maximum:
+                avg_se_in = se['SE_max_in'].mean()
+            else:
+                avg_se_in = se['SE_cont_in'].mean()
             return avg_se_in
         
         # Define the objective function for minimizing SE_Out
         def objective_out(c):
             # Generate data with the given C value
-            data = self.generate_parametric_data(
+            data, se = self.generate_parametric_data(
                 Cin=1,
                 Cout=c[0],
+                k=k,
                 num_samples=num_samples,
                 num_integration_points=num_integration_points
             )
             
             # Return average SE_Out
-            avg_se_out = data['SE_Out'].mean()
-            print(f"Trying Cout = {c[0]:.6f}, Avg SE_Out = {avg_se_out:.6f}")
+            if maximum:
+                avg_se_out = se['SE_max_out'].mean()
+            else:
+                avg_se_out = se['SE_cont_out'].mean()
             return avg_se_out
         
         # Run the optimization for Cin (minimizing SE_In)
-        print("Starting optimization to find optimal Cin (minimizing SE_In)...")
         result_in = minimize(
             objective_in,
             x0=[initial_c],
-            method='Nelder-Mead',
-            options={'xtol': 1e-6, 'disp': True}
+            method='Nelder-Mead'
         )
         
         # Run the optimization for Cout (minimizing SE_Out)
-        print("\nStarting optimization to find optimal Cout (minimizing SE_Out)...")
         result_out = minimize(
             objective_out,
             x0=[initial_c],
-            method='Nelder-Mead',
-            options={'xtol': 1e-6, 'disp': True}
+            method='Nelder-Mead'
         )
         
         # Generate final data with optimal Cin and Cout
         optimal_cin = result_in.x[0]
         optimal_cout = result_out.x[0]
         
-        optimal_data = self.generate_parametric_data(
+        optimal_data, se = self.generate_parametric_data(
             Cin=optimal_cin,
             Cout=optimal_cout,
+            k=k,
             num_samples=num_samples,
             num_integration_points=num_integration_points
         )
         
-        print(f"\nOptimization complete!")
-        print(f"Optimal Cin = {optimal_cin:.6f} (minimizes SE_In)")
-        print(f"Optimal Cout = {optimal_cout:.6f} (minimizes SE_Out)")
-        print(f"Final average SE_In with Cin = {optimal_data['SE_In'].mean():.6f}")
-        print(f"Final average SE_Out with Cin = {optimal_data['SE_Out'].mean():.6f}")
-
-        
-        return optimal_cin, optimal_cout, optimal_data
+        return optimal_cin, optimal_cout, optimal_data, se
         
 
-def main():
-    # Initialize the parametric value model
-    mu = 0.1
-    sigma = 0.5
-    gamma = 0.03
-    delta_t = 1
-    
-    # Create the parametric value model
-    model = ParametricValueModel(mu, sigma, gamma, delta_t)
-    
-    # Find separate optimal Cin and Cout to minimize SE_In and SE_Out
-    # using trapezoidal integration
-    print("Using trapezoidal integration to find optimal C values...")
-    optimal_cin, optimal_cout, optimal_data = model.find_optimal_c_in_out(
-        num_samples=100,
-        num_integration_points=500,
-        initial_c=1.0
-    )
-    
-    # Select columns to display for dual C results
-    display_columns = [
-        'state_idx', 'p', 'x', 'y', 'PV0', 
-        'V0_in', 'V0_out',
-        'Ein', 'Eout', 
-        'EV_in', 'EV_out',
-        'Vd_in', 'Vd_out',
-        'SE_In', 'SE_Out'
-    ]
-    
-    # Print the dual C results
-    print("\nFinal results with optimal Cin and Cout:")
-    print(optimal_data[display_columns].head().to_markdown())
-    
-    # Save results to CSV
-    optimal_data.to_csv('optimal_dual_c_results.csv', index=False)
-    print("Results saved to 'optimal_dual_c_results.csv'")
+def parallel_run():
+    from tqdm import tqdm
+
+    results = []
+    L_list = [100, 1000, 10000]
+    k_list = [-1, -0.5, 0, 0.5, 1]
+    mu_list = [0.0, 0.2, 0.4]
+    sigma_list = [0.1, 0.2, 0.3]
+    gamma_list = [0.0005, 0.003, 0.01]
+    delta_t_list = [1, 2, 3]
+    num_sample_list = [10, 100, 1000]
+    num_integration_points_list = [10, 100, 1000]
+
+    # Calculate total number of iterations
+    total_iterations = len(L_list) * len(mu_list) * len(sigma_list) * len(gamma_list) * len(delta_t_list) * len(num_sample_list) * len(num_integration_points_list)
+
+    # Create progress bar
+    pbar = tqdm(total=total_iterations, desc="Processing parameter combinations")
+
+    for L in L_list:
+        for k in k_list:
+            for mu in mu_list:
+                for sigma in sigma_list:
+                    for gamma in gamma_list:
+                        for delta_t in delta_t_list:
+                            for num_sample in num_sample_list:
+                                for num_integration_points in num_integration_points_list:
+                                    model = ParametricValueModel(L=L,mu=mu, sigma=sigma, gamma=gamma, delta_t=delta_t)
+                                    optimal_cin, optimal_cout, optimal_data, se = model.find_optimal_c_in_out(num_samples=num_sample, num_integration_points=num_integration_points, initial_c=1.0, maximum=False)
+                                    results.append({
+                                        'L': L,
+                                        'mu': mu,
+                                        'sigma': sigma,
+                                        'gamma': gamma,
+                                        'delta_t': delta_t,
+                                        'num_sample': num_sample,
+                                        'num_integration_points': num_integration_points,
+                                        'optimal_cin': optimal_cin,
+                                        'optimal_cout': optimal_cout
+                                        })
+                                    # Update progress bar
+                                    pbar.update(1)
+                                    # Update description with current parameters
+                                    pbar.set_description(f"L={L}, k={k}, mu={mu}, sigma={sigma}, gamma={gamma}, num_sample={num_sample}, num_integration_points={num_integration_points}")
+
+    # Close progress bar
+    pbar.close()
+
+    results_df = pd.DataFrame(results)
+    results_df.to_csv('results.csv', index=False)
 
 if __name__ == "__main__":
-    main()
+    parallel_run()
