@@ -9,7 +9,7 @@ import gc  # Add garbage collector import
 
 class AMMSimulator:
     def __init__(self, x=1000, y=1000, gamma=0.003, s0=1, drift=0, sigma=0.2, 
-                 dt=1/(252*6.5*60), steps=23400, num_paths=10, gamma_values=None):
+                 dt=1/(365), steps=10000, num_paths=1):
         """
         Initialize the AMM Simulator that runs multiple simulations with different seeds
         """
@@ -22,7 +22,6 @@ class AMMSimulator:
         self.dt = dt
         self.steps = steps
         self.num_paths = num_paths
-        self.gamma_values = gamma_values
         self.L = np.sqrt(self.x * self.y)
         
         self.x_init = x
@@ -68,7 +67,7 @@ class AMMSimulator:
         results = {}
 
         # Create an array of gamma values
-        gamma_values = np.round(np.arange(0.0001, 0.0101, 0.0001), 4)
+        gamma_values = [0.003]
         num_gammas = len(gamma_values)
         
         # Create gamma matrix
@@ -76,17 +75,17 @@ class AMMSimulator:
         
         # Initialize arrays for all scenarios
         # Distribute scenario (shared pool)
-        dis_x = np.tile(self.x, (self.num_paths, num_gammas)).astype(np.float64)
-        dis_y = np.tile(self.y, (self.num_paths, num_gammas)).astype(np.float64)
+        dis_x = np.tile(self.x, (self.num_paths, num_gammas))
+        dis_y = np.tile(self.y, (self.num_paths, num_gammas))
         dis_inc_fees = np.zeros((self.num_paths, num_gammas), dtype=np.float64)
         dis_out_fees = np.zeros((self.num_paths, num_gammas), dtype=np.float64)
         
         # Reinvest scenario (separate pools)
-        re_inc_x = np.tile(self.x, (self.num_paths, num_gammas)).astype(np.float64)
-        re_inc_y = np.tile(self.y, (self.num_paths, num_gammas)).astype(np.float64)
+        re_inc_x = np.tile(self.x, (self.num_paths, num_gammas))
+        re_inc_y = np.tile(self.y, (self.num_paths, num_gammas))
         
-        re_out_x = np.tile(self.x, (self.num_paths, num_gammas)).astype(np.float64)
-        re_out_y = np.tile(self.y, (self.num_paths, num_gammas)).astype(np.float64)
+        re_out_x = np.tile(self.x, (self.num_paths, num_gammas))
+        re_out_y = np.tile(self.y, (self.num_paths, num_gammas))
         
         terminal_prices = np.tile(prices[:, -1][:, np.newaxis], (1, num_gammas))
 
@@ -157,49 +156,45 @@ class AMMSimulator:
             
             # ==== REINVEST INCOMING ====
             # Upper threshold crossed
-            delta_upper = gamma_matrix[re_inc_mask_upper]**2 * re_inc_y[:, :, t][re_inc_mask_upper]**2 +\
-                4 * (re_inc_y[:, :, t][re_inc_mask_upper] * re_inc_x[:, :, t][re_inc_mask_upper]) * (1-gamma_matrix[re_inc_mask_upper])**2 * S1[re_inc_mask_upper]
+            delta_upper = gamma_matrix[re_inc_mask_upper]**2 * re_inc_y[re_inc_mask_upper]**2 + 4 * self.L**2 * (1-gamma_matrix[re_inc_mask_upper])**2 * S1[re_inc_mask_upper]
             a_upper = (1-gamma_matrix[re_inc_mask_upper])
-            b_upper = (2-gamma_matrix[re_inc_mask_upper]) * re_inc_y[:, :, t][re_inc_mask_upper]
+            b_upper = (2-gamma_matrix[re_inc_mask_upper]) * re_inc_y[re_inc_mask_upper]
             delta_y = (-b_upper + np.sqrt(delta_upper)) / (2 * a_upper)
-            re_inc_y_new[re_inc_mask_upper] = re_inc_y[:, :, t][re_inc_mask_upper] + delta_y
+            re_inc_y_new[re_inc_mask_upper] = re_inc_y[re_inc_mask_upper] + delta_y
             re_inc_x_new[re_inc_mask_upper] = re_inc_y_new[re_inc_mask_upper] / ((1-gamma_matrix[re_inc_mask_upper]) * S1[re_inc_mask_upper])
             
             # Lower threshold crossed
-            delta_lower = gamma_matrix[re_inc_mask_lower]**2 * re_inc_x[:, :, t][re_inc_mask_lower]**2 +\
-                4 * (re_inc_x[:, :, t][re_inc_mask_lower] * re_inc_y[:, :, t][re_inc_mask_lower]) * (1-gamma_matrix[re_inc_mask_lower])**2 / S1[re_inc_mask_lower]
+            delta_lower = gamma_matrix[re_inc_mask_lower]**2 * re_inc_x[re_inc_mask_lower]**2 + 4 * self.L**2 * (1-gamma_matrix[re_inc_mask_lower])**2 / S1[re_inc_mask_lower]
             a_lower = (1-gamma_matrix[re_inc_mask_lower])
-            b_lower = (2-gamma_matrix[re_inc_mask_lower]) * re_inc_x[:, :, t][re_inc_mask_lower]
+            b_lower = (2-gamma_matrix[re_inc_mask_lower]) * re_inc_x[re_inc_mask_lower]
             delta_x = (-b_lower + np.sqrt(delta_lower)) / (2 * a_lower)
-            re_inc_x_new[re_inc_mask_lower] = re_inc_x[:, :, t][re_inc_mask_lower] + delta_x
+            re_inc_x_new[re_inc_mask_lower] = re_inc_x[re_inc_mask_lower] + delta_x
             re_inc_y_new[re_inc_mask_lower] = re_inc_x_new[re_inc_mask_lower] * S1[re_inc_mask_lower] / (1-gamma_matrix[re_inc_mask_lower])
             
             # No trade
-            re_inc_x_new[re_inc_mask_no_trade] = re_inc_x[:, :, t][re_inc_mask_no_trade]
-            re_inc_y_new[re_inc_mask_no_trade] = re_inc_y[:, :, t][re_inc_mask_no_trade]
+            re_inc_x_new[re_inc_mask_no_trade] = re_inc_x[re_inc_mask_no_trade]
+            re_inc_y_new[re_inc_mask_no_trade] = re_inc_y[re_inc_mask_no_trade]
             
             # ==== REINVEST OUTGOING ====
             # Upper threshold crossed 
-            delta_upper = gamma_matrix[re_out_mask_upper]**2 * re_out_x[:, :, t][re_out_mask_upper]**2 +\
-                4 * (re_out_x[:, :, t][re_out_mask_upper] * re_out_y[:, :, t][re_out_mask_upper]) * (1-gamma_matrix[re_out_mask_upper])**2 / S1[re_out_mask_upper]
+            delta_upper = gamma_matrix[re_out_mask_upper]**2 * re_out_x[re_out_mask_upper]**2 + 4 * self.L**2 / S1[re_out_mask_upper]
             a_upper = (1-gamma_matrix[re_out_mask_upper])
-            b_upper = -(2-gamma_matrix[re_out_mask_upper]) * re_out_x[:, :, t][re_out_mask_upper]
+            b_upper = -(2-gamma_matrix[re_out_mask_upper]) * re_out_x[re_out_mask_upper]
             delta_x = (-b_upper - np.sqrt(delta_upper)) / (2 * a_upper)
-            re_out_x_new[re_out_mask_upper] = re_out_x[:, :, t][re_out_mask_upper] - (1-gamma_matrix[re_out_mask_upper]) * delta_x
+            re_out_x_new[re_out_mask_upper] = re_out_x[re_out_mask_upper] - (1-gamma_matrix[re_out_mask_upper]) * delta_x
             re_out_y_new[re_out_mask_upper] = re_out_x_new[re_out_mask_upper] * (1-gamma_matrix[re_out_mask_upper]) * S1[re_out_mask_upper]
 
             # Lower threshold crossed
-            delta_lower = gamma_matrix[re_out_mask_lower]**2 * re_out_y[:, :, t][re_out_mask_lower]**2 +\
-                4 * (re_out_y[:, :, t][re_out_mask_lower] * re_out_x[:, :, t][re_out_mask_lower]) * (1-gamma_matrix[re_out_mask_lower])**2 * S1[re_out_mask_lower]
+            delta_lower = gamma_matrix[re_out_mask_lower]**2 * re_out_y[re_out_mask_lower]**2 + 4 * self.L**2 * S1[re_out_mask_lower]
             a_lower = (1-gamma_matrix[re_out_mask_lower])
-            b_lower = -(2-gamma_matrix[re_out_mask_lower]) * re_out_y[:, :, t][re_out_mask_lower]
+            b_lower = -(2-gamma_matrix[re_out_mask_lower]) * re_out_y[re_out_mask_lower]
             delta_y = (-b_lower - np.sqrt(delta_lower)) / (2 * a_lower)
-            re_out_y_new[re_out_mask_lower] = re_out_y[:, :, t][re_out_mask_lower] - (1-gamma_matrix[re_out_mask_lower]) * delta_y
+            re_out_y_new[re_out_mask_lower] = re_out_y[re_out_mask_lower] - (1-gamma_matrix[re_out_mask_lower]) * delta_y
             re_out_x_new[re_out_mask_lower] = re_out_y_new[re_out_mask_lower] * (1-gamma_matrix[re_out_mask_lower]) / S1[re_out_mask_lower]
 
             # No trade
-            re_out_x_new[re_out_mask_no_trade] = re_out_x[:, :, t][re_out_mask_no_trade]
-            re_out_y_new[re_out_mask_no_trade] = re_out_y[:, :, t][re_out_mask_no_trade]
+            re_out_x_new[re_out_mask_no_trade] = re_out_x[re_out_mask_no_trade]
+            re_out_y_new[re_out_mask_no_trade] = re_out_y[re_out_mask_no_trade]
             
             # Update state for next iteration
             dis_x = dis_x_new
@@ -326,10 +321,12 @@ class AMMSimulator:
         results = {}
 
         # Create an array of gamma values
-        num_gammas = len(self.gamma_values)
+        gamma_values = [0.003]
+        num_gammas = len(gamma_values)
         
         # Create gamma matrix
-        gamma_matrix = np.tile(self.gamma_values, (self.num_paths, 1))
+        gamma_matrix = np.tile(gamma_values, (self.num_paths, 1))
+        
         # Initialize arrays for all scenarios with time dimension
         # Distribute scenario (shared pool)
         dis_x = np.tile(self.x, (self.num_paths, num_gammas, self.steps + 1)).astype(np.float64)
@@ -343,20 +340,17 @@ class AMMSimulator:
         
         re_out_x = np.tile(self.x, (self.num_paths, num_gammas, self.steps + 1)).astype(np.float64)
         re_out_y = np.tile(self.y, (self.num_paths, num_gammas, self.steps + 1)).astype(np.float64)
-        
-        dis_vin = np.zeros((self.num_paths, num_gammas, self.steps + 1), dtype=np.float64)
-        dis_vout = np.zeros((self.num_paths, num_gammas, self.steps + 1), dtype=np.float64)
-        re_vin = np.zeros((self.num_paths, num_gammas, self.steps + 1), dtype=np.float64)
-        re_vout = np.zeros((self.num_paths, num_gammas, self.steps + 1), dtype=np.float64)
-        
+
         # Iterate through time steps
-        for t in range(self.steps):
+        for t in tqdm(range(self.steps)):
             # Get current price with broadcasting
             S1 = np.tile(prices[:, t+1][:, np.newaxis], (1, num_gammas))
+            
             # Calculate thresholds for each scenario (3 sets)
             # 1. Distribute thresholds
             dis_upper = dis_y[:, :, t] / ((1 - gamma_matrix) * dis_x[:, :, t])
             dis_lower = (1 - gamma_matrix) * dis_y[:, :, t] / dis_x[:, :, t]
+            
             # 2. Reinvest Incoming thresholds
             re_inc_upper = re_inc_y[:, :, t] / ((1 - gamma_matrix) * re_inc_x[:, :, t])
             re_inc_lower = (1 - gamma_matrix) * re_inc_y[:, :, t] / re_inc_x[:, :, t]
@@ -413,28 +407,22 @@ class AMMSimulator:
             dis_out_fees_step[dis_mask_lower] = gamma_matrix[dis_mask_lower] * (dis_y[:, :, t][dis_mask_lower] - dis_y_new[dis_mask_lower])
             
             # ==== REINVEST INCOMING ====
-            re_in_L = np.sqrt(re_inc_x[:, :, t] * re_inc_y[:, :, t])
             # Upper threshold crossed
-            re_in_a_upper = 1 - gamma_matrix[re_inc_mask_upper]
-            re_in_b_upper = (2-gamma_matrix[re_inc_mask_upper]) * re_inc_y[:, :, t][re_inc_mask_upper]
-            re_in_c_upper = re_inc_y[:, :, t][re_inc_mask_upper]**2 - re_in_L**2 * S1[re_inc_mask_upper] * (1-gamma_matrix[re_inc_mask_upper])
-            re_in_delta_y_upper = (-re_in_b_upper + np.sqrt(re_in_b_upper**2 - 4 * re_in_a_upper * re_in_c_upper)) / (2 * re_in_a_upper)
-            print(f"shape of gamma_matrix: {gamma_matrix.shape}")
-            print(f"shape of re_inc_mask_upper: {re_inc_mask_upper.shape}")
-            print(f"shape of gamma_matrix[re_inc_mask_upper]: {gamma_matrix[re_inc_mask_upper].shape}")
-            print(f"shape of a_upper: {re_in_a_upper.shape}")
-            print(f"shape of b_upper: {re_in_b_upper.shape}")
-            print(f"shape of c_upper: {re_in_c_upper.shape}")
-            print(f"shape of delta_y_upper: {re_in_delta_y_upper.shape}")
-            re_inc_y_new[re_inc_mask_upper] = re_inc_y[:, :, t][re_inc_mask_upper] + re_in_delta_y_upper
+            delta_upper = gamma_matrix[re_inc_mask_upper]**2 * re_inc_y[:, :, t][re_inc_mask_upper]**2 +\
+                4 * (re_inc_y[:, :, t][re_inc_mask_upper] * re_inc_x[:, :, t][re_inc_mask_upper]) * (1-gamma_matrix[re_inc_mask_upper])**2 * S1[re_inc_mask_upper]
+            a_upper = (1-gamma_matrix[re_inc_mask_upper])
+            b_upper = (2-gamma_matrix[re_inc_mask_upper]) * re_inc_y[:, :, t][re_inc_mask_upper]
+            delta_y = (-b_upper + np.sqrt(delta_upper)) / (2 * a_upper)
+            re_inc_y_new[re_inc_mask_upper] = re_inc_y[:, :, t][re_inc_mask_upper] + delta_y
             re_inc_x_new[re_inc_mask_upper] = re_inc_y_new[re_inc_mask_upper] / ((1-gamma_matrix[re_inc_mask_upper]) * S1[re_inc_mask_upper])
             
             # Lower threshold crossed
-            re_in_a_lower = 1 - gamma_matrix[re_inc_mask_lower]
-            re_in_b_lower = (2-gamma_matrix[re_inc_mask_lower]) * re_inc_x[:, :, t][re_inc_mask_lower]
-            re_in_c_lower = re_inc_x[:, :, t][re_inc_mask_lower]**2 - re_in_L**2 * (1-gamma_matrix[re_inc_mask_lower]) / S1[re_inc_mask_lower]
-            re_in_delta_x_lower = (-re_in_b_lower + np.sqrt(re_in_b_lower**2 - 4 * re_in_a_lower * re_in_c_lower)) / (2 * re_in_a_lower)
-            re_inc_x_new[re_inc_mask_lower] = re_inc_x[:, :, t][re_inc_mask_lower] + re_in_delta_x_lower
+            delta_lower = gamma_matrix[re_inc_mask_lower]**2 * re_inc_x[:, :, t][re_inc_mask_lower]**2 +\
+                4 * (re_inc_x[:, :, t][re_inc_mask_lower] * re_inc_y[:, :, t][re_inc_mask_lower]) * (1-gamma_matrix[re_inc_mask_lower])**2 / S1[re_inc_mask_lower]
+            a_lower = (1-gamma_matrix[re_inc_mask_lower])
+            b_lower = (2-gamma_matrix[re_inc_mask_lower]) * re_inc_x[:, :, t][re_inc_mask_lower]
+            delta_x = (-b_lower + np.sqrt(delta_lower)) / (2 * a_lower)
+            re_inc_x_new[re_inc_mask_lower] = re_inc_x[:, :, t][re_inc_mask_lower] + delta_x
             re_inc_y_new[re_inc_mask_lower] = re_inc_x_new[re_inc_mask_lower] * S1[re_inc_mask_lower] / (1-gamma_matrix[re_inc_mask_lower])
             
             # No trade
@@ -443,20 +431,21 @@ class AMMSimulator:
             
             # ==== REINVEST OUTGOING ====
             # Upper threshold crossed 
-            re_out_L = np.sqrt(re_out_x[:, :, t] * re_out_y[:, :, t])
-            re_out_a_upper = 1 - gamma_matrix[re_out_mask_upper]
-            re_out_b_upper = -(2-gamma_matrix[re_out_mask_upper]) * re_out_x[:, :, t][re_out_mask_upper]
-            re_out_c_upper = re_out_x[:, :, t][re_out_mask_upper]**2 - re_out_L**2 / (S1[re_out_mask_upper] * (1-gamma_matrix[re_out_mask_upper]))
-            re_out_delta_x_upper = (-re_out_b_upper - np.sqrt(re_out_b_upper**2 - 4 * re_out_a_upper * re_out_c_upper)) / (2 * re_out_a_upper)
-            re_out_x_new[re_out_mask_upper] = re_out_x[:, :, t][re_out_mask_upper] - (1-gamma_matrix[re_out_mask_upper]) * re_out_delta_x_upper
+            delta_upper = gamma_matrix[re_out_mask_upper]**2 * re_out_x[:, :, t][re_out_mask_upper]**2 +\
+                4 * (re_out_x[:, :, t][re_out_mask_upper] * re_out_y[:, :, t][re_out_mask_upper]) * (1-gamma_matrix[re_out_mask_upper])**2 / S1[re_out_mask_upper]
+            a_upper = (1-gamma_matrix[re_out_mask_upper])
+            b_upper = -(2-gamma_matrix[re_out_mask_upper]) * re_out_x[:, :, t][re_out_mask_upper]
+            delta_x = (-b_upper - np.sqrt(delta_upper)) / (2 * a_upper)
+            re_out_x_new[re_out_mask_upper] = re_out_x[:, :, t][re_out_mask_upper] - (1-gamma_matrix[re_out_mask_upper]) * delta_x
             re_out_y_new[re_out_mask_upper] = re_out_x_new[re_out_mask_upper] * (1-gamma_matrix[re_out_mask_upper]) * S1[re_out_mask_upper]
 
             # Lower threshold crossed
-            re_out_a_lower = 1 - gamma_matrix[re_out_mask_lower]
-            re_out_b_lower = -(2-gamma_matrix[re_out_mask_lower]) * re_out_y[:, :, t][re_out_mask_lower]
-            re_out_c_lower = re_out_y[:, :, t][re_out_mask_lower]**2 - re_out_L**2 * S1[re_out_mask_lower] / (1-gamma_matrix[re_out_mask_lower])
-            re_out_delta_y_lower = (-re_out_b_lower - np.sqrt(re_out_b_lower**2 - 4 * re_out_a_lower * re_out_c_lower)) / (2 * re_out_a_lower)
-            re_out_y_new[re_out_mask_lower] = re_out_y[:, :, t][re_out_mask_lower] - (1-gamma_matrix[re_out_mask_lower]) * re_out_delta_y_lower
+            delta_lower = gamma_matrix[re_out_mask_lower]**2 * re_out_y[:, :, t][re_out_mask_lower]**2 +\
+                4 * (re_out_y[:, :, t][re_out_mask_lower] * re_out_x[:, :, t][re_out_mask_lower]) * (1-gamma_matrix[re_out_mask_lower])**2 * S1[re_out_mask_lower]
+            a_lower = (1-gamma_matrix[re_out_mask_lower])
+            b_lower = -(2-gamma_matrix[re_out_mask_lower]) * re_out_y[:, :, t][re_out_mask_lower]
+            delta_y = (-b_lower - np.sqrt(delta_lower)) / (2 * a_lower)
+            re_out_y_new[re_out_mask_lower] = re_out_y[:, :, t][re_out_mask_lower] - (1-gamma_matrix[re_out_mask_lower]) * delta_y
             re_out_x_new[re_out_mask_lower] = re_out_y_new[re_out_mask_lower] * (1-gamma_matrix[re_out_mask_lower]) / S1[re_out_mask_lower]
 
             # No trade
@@ -474,15 +463,9 @@ class AMMSimulator:
             
             re_out_x[:, :, t+1] = re_out_x_new
             re_out_y[:, :, t+1] = re_out_y_new
-            
-            # update vin and vout
-            dis_vin[:, :, t+1] = dis_x[:, :, t+1] * S1 + dis_y[:, :, t+1] + dis_inc_fees[:, :, t+1]
-            dis_vout[:, :, t+1] = dis_x[:, :, t+1] * S1 + dis_y[:, :, t+1] + dis_out_fees[:, :, t+1]
-            re_vin[:, :, t+1] = re_inc_x[:, :, t+1] * S1 + re_inc_y[:, :, t+1]
-            re_vout[:, :, t+1] = re_out_x[:, :, t+1] * S1 + re_out_y[:, :, t+1]
 
         # Store all path results for each gamma with full time evolution
-        for i, gamma in enumerate(self.gamma_values):
+        for i, gamma in enumerate(gamma_values):
             results[gamma] = {
                 'prices': prices,  # shape: (num_paths, time_steps)
                 'dis_x': dis_x[:, i, :],  # shape: (num_paths, time_steps)
@@ -492,82 +475,144 @@ class AMMSimulator:
                 're_inc_x': re_inc_x[:, i, :],
                 're_inc_y': re_inc_y[:, i, :],
                 're_out_x': re_out_x[:, i, :],
-                're_out_y': re_out_y[:, i, :],
-                'dis_vin': dis_vin[:, i, :],
-                'dis_vout': dis_vout[:, i, :],
-                're_vin': re_vin[:, i, :],
-                're_vout': re_vout[:, i, :]
+                're_out_y': re_out_y[:, i, :]
             }
         
         return results
 
-    def results_to_dataframe(self, seeds, output_dir=None):
+    def parallel_simulate_all_paths(self, output_dir, num_seeds, start_seed=0):
         """
-        Convert simulation results for a particular seed and sigma into a DataFrame
+        Run simulations in parallel across multiple seeds and store all path results with full time evolution,
+        writing out results in chunks to manage memory usage.
+        """
+        n_workers = 20
+        chunk_size = 1000000  # Number of rows per chunk
+        current_chunk = 0
         
-        Parameters:
-        -----------
-        seed : int
-            The seed used for the simulation
-        output_dir : str, optional
-            Directory to save the DataFrame as CSV. If None, the DataFrame is not saved.
-            
-        Returns:
-        --------
-        pl.DataFrame
-            DataFrame containing all simulation results for the given seed and sigma
-        """
+        # Create the seed range
+        seeds = range(start_seed, start_seed + num_seeds)
+        
+        # Create output directory if it doesn't exist
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Initialize arrays to collect results
         all_data = []
-        for seed in tqdm(seeds, desc=f"Processing seeds for sigma={self.sigma}"):
-            # Run simulation for the given seed
-            results = self.simulate_all_paths(seed)
+        total_rows = 0
         
-            # Extract data for each gamma value
-            for gamma, data in results.items():
-                # For each path in the simulation
+        # Calculate total number of rows for progress bar
+        gamma_values = np.round(np.arange(0.005, 0.010, 0.005), 3)
+        total_expected_rows = num_seeds * self.num_paths * len(gamma_values) * (self.steps + 1)
+        pbar = tqdm(total=total_expected_rows, desc=f"Processing rows for sigma={self.sigma}")
+        
+        # Run simulations in parallel
+        with mp.Pool(n_workers) as pool:
+            results = list(tqdm(
+                pool.imap(self.simulate_all_paths, seeds),
+                total=num_seeds,
+                desc=f"Processing seeds for sigma={self.sigma}"
+            ))
+        
+        # Process results and write in chunks
+        for seed_idx, seed_result in enumerate(results):
+            for gamma, path_results in seed_result.items():
                 for path_idx in range(self.num_paths):
-                    row_data = {
-                        'seed': seed,
-                        'sigma': self.sigma,
-                        'gamma': gamma,
-                        'path_idx': path_idx,
-                        'S_T': data['prices'][path_idx, -1],
-                        'dis_x': data['dis_x'][path_idx, -1],
-                        'dis_y': data['dis_y'][path_idx, -1],
-                        're_inc_x': data['re_inc_x'][path_idx, -1],
-                        're_inc_y': data['re_inc_y'][path_idx, -1],
-                        're_out_x': data['re_out_x'][path_idx, -1],
-                        're_out_y': data['re_out_y'][path_idx, -1],
-                        'dis_inc_fee': data['dis_inc_fees'][path_idx, -1],
-                        'dis_out_fee': data['dis_out_fees'][path_idx, -1],
-                        'dis_vin': data['dis_vin'][path_idx, -1],
-                        'dis_vout': data['dis_vout'][path_idx, -1],
-                        're_vin': data['re_vin'][path_idx, -1],
-                        're_vout': data['re_vout'][path_idx, -1]
-                    }
-                    all_data.append(row_data)
-            
-        # Convert to DataFrame
-        results_df = pl.DataFrame(all_data)
+                    for time_idx in range(self.steps + 1):
+                        all_data.append({
+                            'seed_idx': seed_idx,
+                            'path_idx': path_idx,
+                            'time_idx': time_idx,
+                            'gamma': gamma,
+                            'price': path_results['prices'][path_idx, time_idx],  
+                            'dis_x': path_results['dis_x'][path_idx, time_idx],
+                            'dis_y': path_results['dis_y'][path_idx, time_idx],
+                            'dis_inc_fees': path_results['dis_inc_fees'][path_idx, time_idx],
+                            'dis_out_fees': path_results['dis_out_fees'][path_idx, time_idx],
+                            're_inc_x': path_results['re_inc_x'][path_idx, time_idx],
+                            're_inc_y': path_results['re_inc_y'][path_idx, time_idx],
+                            're_out_x': path_results['re_out_x'][path_idx, time_idx],
+                            're_out_y': path_results['re_out_y'][path_idx, time_idx]
+                        })
+                        total_rows += 1
+                        pbar.update(1)
+                        
+                        # Write chunk if we've reached the chunk size
+                        if total_rows >= chunk_size:
+                            # Convert to DataFrame and sort
+                            results_df = pl.DataFrame(all_data)
+                            results_df = results_df.sort(['seed_idx', 'path_idx', 'time_idx', 'gamma'])
+                            
+                            # Write chunk to parquet file
+                            chunk_file = f"{output_dir}/all_paths_results_{self.sigma}_chunk_{current_chunk}.parquet"
+                            results_df.write_parquet(chunk_file, compression='zstd')
+                            
+                            # Clear memory
+                            del results_df
+                            gc.collect()  # Force garbage collection
+                            
+                            # Reset for next chunk
+                            all_data = []
+                            total_rows = 0
+                            current_chunk += 1
         
-        # Sort by gamma and path_idx
-        results_df = results_df.sort(['seed', 'path_idx', 'sigma', 'gamma'])
-        
-        # Save to CSV if output_dir is provided
-        if output_dir:
-            os.makedirs(output_dir, exist_ok=True)
-            results_df.write_csv(f"{output_dir}/results_sigma{self.sigma}.csv")
+        # Write any remaining data
+        if all_data:
+            results_df = pl.DataFrame(all_data)
+            results_df = results_df.sort(['seed_idx', 'path_idx', 'time_idx', 'gamma'])
+            chunk_file = f"{output_dir}/all_paths_results_{self.sigma}_chunk_{current_chunk}.parquet"
+            results_df.write_parquet(chunk_file, compression='zstd')
             
-        return results_df
+            # Clear memory after final write
+            del results_df
+            gc.collect()
+        
+        pbar.close()
+        print(f"All results written in {current_chunk + 1} chunks for sigma={self.sigma}")
+
+    @staticmethod
+    def combine_chunks_for_sigma(sigma, output_dir, delete_chunks=True):
+        """
+        Combine all chunk files for a specific sigma value into a single DataFrame.
+        """
+        # Find all chunk files for the given sigma
+        chunk_files = sorted([f for f in os.listdir(output_dir) 
+                            if f.startswith(f'all_paths_results_{sigma}_chunk_') and f.endswith('.parquet')])
+        
+        if not chunk_files:
+            raise ValueError(f"No chunk files found for sigma={sigma}")
+        
+        # Read and combine all chunks
+        print(f"Combining {len(chunk_files)} chunks for sigma={sigma}...")
+        dfs = []
+        for chunk_file in tqdm(chunk_files, desc="Reading chunks"):
+            df = pl.read_parquet(os.path.join(output_dir, chunk_file))
+            dfs.append(df)
+        
+        # Concatenate all DataFrames
+        combined_df = pl.concat(dfs)
+        
+        # Sort the final DataFrame
+        combined_df = combined_df.sort(['gamma'])
+        
+        # Write the combined file
+        combined_file = os.path.join(output_dir, f'all_paths_results_{sigma}_combined.parquet')
+        combined_df.write_parquet(combined_file, compression='zstd')
+        print(f"Combined data written to {combined_file}")
+        
+        # Delete individual chunk files if requested
+        if delete_chunks:
+            print("Deleting individual chunk files...")
+            for chunk_file in tqdm(chunk_files, desc="Deleting chunks"):
+                os.remove(os.path.join(output_dir, chunk_file))
+            print(f"Deleted {len(chunk_files)} chunk files")
+        
+        return combined_df
 
 if __name__ == "__main__":
     import pandas as pd
     import os
-    output_dir = '/home/shiftpub/Dynamic_AMM/inf_step_exp/mc_approach/mc_results'
+    output_dir = '/home/shiftpub/Dynamic_AMM/inf_step_exp/mc_approach/mc_results_temp'
     os.makedirs(output_dir, exist_ok=True)
-    gamma_values = np.round(np.arange(0.0001, 0.0101, 0.0001), 4)
-    sigma = np.round(np.arange(0.001, 0.021, 0.001), 3)
-    seeds = range(0, 1000)
+    sigma = [0.006]
     for s in sigma:
         simulator = AMMSimulator(
             x=1000,          # Initial X reserve
@@ -577,9 +622,8 @@ if __name__ == "__main__":
             drift=0.0,       # No drift
             sigma=s,
             dt=1/(365*24),
-            steps=10000,
-            num_paths=100,
-            gamma_values=gamma_values
+            steps=1000000,
+            num_paths=1
         )
-        # simulator.parallel_simulate(output_dir, num_seeds=1000, start_seed=0)
-        simulator.results_to_dataframe(seeds, output_dir=output_dir)
+        simulator.parallel_simulate_all_paths(output_dir, num_seeds=1, start_seed=0)
+        simulator.combine_chunks_for_sigma(s, output_dir, delete_chunks=True)

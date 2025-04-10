@@ -146,6 +146,7 @@ class TwoStepAnalysis:
         # Convert to DataFrame and save
         df = pl.DataFrame(results)
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        df.write_csv(output_path.replace('.parquet', '.csv'))
         df.write_parquet(output_path, compression="snappy")
         
         print(f"\nSuccessfully saved metrics to {output_path}")

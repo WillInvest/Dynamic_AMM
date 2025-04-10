@@ -121,27 +121,39 @@ class FeeRevenues(BasePool):
                 delta_s2 = self.calc.get_delta_s(f, fee_source, (v1, 'd'), (v2, 'd'))[1]
                 return delta_s2 * f * self.phi(v1, sigma) * self.phi(v2, sigma)
                 
-        # Step 1 integration
-        E_F1_up = integrate.quad(integrand_up_1, 1/(1-f), np.inf)[0]
+        # Define a large but finite upper bound for integration
+        UPPER_BOUND = 3  # This should be large enough for most practical cases
+        
+        # Step 1 integration with integration parameters
+        E_F1_up = integrate.quad(integrand_up_1, 1/(1-f), UPPER_BOUND)[0]
         E_F1_mid = integrate.quad(integrand_mid_1, 1-f, 1/(1-f))[0]
         E_F1_down = integrate.quad(integrand_down_1, 0, 1-f)[0]
         E_F1 = E_F1_up + E_F1_mid + E_F1_down
         
-        # Step 2 integration - all nine cases
+        # Step 2 integration - all nine cases with integration parameters
         # Upper region (v1 > 1/(1-f))
-        E_F2_uu = integrate.dblquad(integrand_uu, 1/(1-f), np.inf, lambda v1: 1, lambda v1: np.inf)[0]
-        E_F2_um = integrate.dblquad(integrand_um, 1/(1-f), np.inf, lambda v1: (1-f)**2, lambda v1: 1)[0]
-        E_F2_ud = integrate.dblquad(integrand_ud, 1/(1-f), np.inf, lambda v1: 0, lambda v1: (1-f)**2)[0]
+        E_F2_uu = integrate.dblquad(integrand_uu, 1/(1-f), UPPER_BOUND,
+                                  lambda v1: 1, lambda v1: UPPER_BOUND)[0]
+        E_F2_um = integrate.dblquad(integrand_um, 1/(1-f), UPPER_BOUND,
+                                  lambda v1: (1-f)**2, lambda v1: 1)[0]
+        E_F2_ud = integrate.dblquad(integrand_ud, 1/(1-f), UPPER_BOUND,
+                                  lambda v1: 0, lambda v1: (1-f)**2)[0]
         
         # Middle region (1-f < v1 < 1/(1-f))
-        E_F2_mu = integrate.dblquad(integrand_mu, 1-f, 1/(1-f), lambda v1: 1/(v1*(1-f)), lambda v1: np.inf)[0]
-        E_F2_mm = integrate.dblquad(integrand_mm, 1-f, 1/(1-f),lambda v1: (1-f)/v1, lambda v1: 1/(v1*(1-f)))[0]
-        E_F2_md = integrate.dblquad(integrand_md, 1-f, 1/(1-f),lambda v1: 0, lambda v1: (1-f)/v1)[0]
+        E_F2_mu = integrate.dblquad(integrand_mu, 1-f, 1/(1-f),
+                                  lambda v1: 1/(v1*(1-f)), lambda v1: UPPER_BOUND)[0]
+        E_F2_mm = integrate.dblquad(integrand_mm, 1-f, 1/(1-f),
+                                  lambda v1: (1-f)/v1, lambda v1: 1/(v1*(1-f)))[0]
+        E_F2_md = integrate.dblquad(integrand_md, 1-f, 1/(1-f),
+                                  lambda v1: 0, lambda v1: (1-f)/v1)[0]
         
         # Lower region (v1 < 1-f)
-        E_F2_du = integrate.dblquad(integrand_du, 0, 1-f,lambda v1: 1/(1-f)**2, lambda v1: np.inf)[0]
-        E_F2_dm = integrate.dblquad(integrand_dm, 0, 1-f,lambda v1: 1, lambda v1: 1/(1-f)**2)[0]
-        E_F2_dd = integrate.dblquad(integrand_dd, 0, 1-f,lambda v1: 0, lambda v1: 1)[0]
+        E_F2_du = integrate.dblquad(integrand_du, 0, 1-f,
+                                  lambda v1: 1/(1-f)**2, lambda v1: UPPER_BOUND)[0]
+        E_F2_dm = integrate.dblquad(integrand_dm, 0, 1-f,
+                                  lambda v1: 1, lambda v1: 1/(1-f)**2)[0]
+        E_F2_dd = integrate.dblquad(integrand_dd, 0, 1-f,
+                                  lambda v1: 0, lambda v1: 1)[0]
         
         E_F2 = E_F2_uu + E_F2_um + E_F2_ud + E_F2_mu + E_F2_mm + E_F2_md + E_F2_du + E_F2_dm + E_F2_dd
         
