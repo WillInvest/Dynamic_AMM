@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import polars as pl
 from test_case import Test_Simulator
-from crazy_simulation import AMMSimulator
+from inf_step_exp.mc_approach.jit_simulate import AMMSimulator
 
 def compare_simulators(params):
     """

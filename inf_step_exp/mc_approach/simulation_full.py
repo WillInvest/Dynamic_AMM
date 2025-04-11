@@ -8,7 +8,7 @@ from copy import deepcopy
 import gc  # Add garbage collector import
 
 class AMMSimulator:
-    def __init__(self, x=1000, y=1000, gamma=0.003, s0=1, drift=0, sigma=0.2, 
+    def __init__(self, x=1000, y=1000, gamma=0.002, s0=1, drift=0, sigma=0.2, 
                  dt=1/(365), steps=10000, num_paths=1):
         """
         Initialize the AMM Simulator that runs multiple simulations with different seeds
@@ -43,8 +43,10 @@ class AMMSimulator:
         t = np.arange(1, n+1) * self.dt
         
         # Initialize random number generator
-        rng = np.random.default_rng(seed)
-        Z = rng.normal(0, 1, size=(self.num_paths, n))
+        np.random.seed(seed)
+        
+        # Generate random normal variables
+        Z = np.random.normal(0, 1, size=(self.num_paths, n))
         
         # Initialize price array for all seeds
         prices = np.zeros((self.num_paths, n + 1))
@@ -67,7 +69,7 @@ class AMMSimulator:
         results = {}
 
         # Create an array of gamma values
-        gamma_values = [0.003]
+        gamma_values = [0.002]
         num_gammas = len(gamma_values)
         
         # Create gamma matrix
@@ -321,7 +323,7 @@ class AMMSimulator:
         results = {}
 
         # Create an array of gamma values
-        gamma_values = [0.003]
+        gamma_values = [0.002]
         num_gammas = len(gamma_values)
         
         # Create gamma matrix

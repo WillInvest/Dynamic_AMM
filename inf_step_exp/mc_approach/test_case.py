@@ -16,14 +16,22 @@ class Test_Simulator:
         self.seed = seed
         
     def generate_paths(self):
+        # Set the seed for reproducibility
         rng = np.random.default_rng(self.seed)
+        
+        # Generate random normal variables
         Z = rng.normal(0, 1, size=(self.steps,))
+        
+        # Initialize price array
         S = np.zeros((self.steps + 1,))
         S[0] = self.s0
         
+        # Calculate time points and terms
         t = np.arange(1, self.steps + 1) * self.dt
         drift_term = (self.drift - 0.5 * self.sigma**2) * t
         diffusion_term = self.sigma * np.sqrt(self.dt) * np.cumsum(Z)
+        
+        # Calculate final prices
         S[1:] = self.s0 * np.exp(drift_term + diffusion_term)
             
         return S
@@ -150,7 +158,7 @@ class Test_Simulator:
                 re_out_y[i+1] = re_out_y[i]
                 
             results.append({
-                'time_step': i,
+                'time_step': i+1,
                 'price': s,
                 'dis_x': dis_x[i+1],
                 'dis_y': dis_y[i+1],
