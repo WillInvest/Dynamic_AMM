@@ -163,10 +163,10 @@ if __name__ == "__main__":
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     output_dir = f'/home/shiftpub/Dynamic_AMM/inf_step_exp/mc_approach/jit_simulation_results/{timestamp}'
     os.makedirs(output_dir, exist_ok=True)
-    num_epochs = 100
+    num_epochs = 1000
     for epoch in tqdm(range(num_epochs)):
         # Use smaller values for profiling
-        num_paths = 100
+        num_paths = 1000
         gamma_values = np.round(np.arange(0.0005, 0.0105, 0.0005), 4)
         sigma_values = np.round(np.arange(0.002, 0.022, 0.002), 3)
         steps = 1000000

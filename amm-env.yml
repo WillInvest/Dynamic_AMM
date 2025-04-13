@@ -1,4 +1,4 @@
-name: dynamic_amm
+name: amm-env
 channels:
   - pytorch
   - conda-forge
@@ -16,4 +16,5 @@ dependencies:
   - pip:
     - tqdm
     - polars
-    - pyarrow  # for parquet support
+    - pyarrow  # for parquet support 
+    - numba
