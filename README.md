@@ -1,3 +1,5 @@
 # conda env create -f amm-env.yml
 
-# exp/parallel_dummy is to use GBM to simulate 
+# inf_step_exp/jit_simulate.py to start simulate
+
+# crazy.ipynb to visualize 
