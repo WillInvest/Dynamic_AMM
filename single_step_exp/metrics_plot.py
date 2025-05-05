@@ -10,6 +10,97 @@ import matplotlib.pyplot as plt
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
 
+
+def subplot_single_step(path: str, metric: str):
+    """
+    Create multiple plots from parquet data showing single step fee source comparisons
+    
+    Parameters:
+    -----------
+    path : str
+        Path to the parquet file
+    metric : str
+        Metric to plot
+    """
+    df = pl.read_parquet(path)
+    df = df.filter(pl.col('metric') == metric)
+    
+    # Get all sigma values and sort them
+    subplot_values = df.get_column('sigma').unique().sort()
+    x_column = 'fee_rate'
+    x_label = 'Fee Rate (bps)'
+    x_scale = 10000  # Convert to bps
+
+    # Line styles for each fee source
+    styles = {
+        'in': ('black', '-', 'Incoming'),
+        'out': ('red', '-', 'Outgoing')
+    }
+    
+    # Calculate number of figures needed for 3x3 grid
+    n_total_values = len(subplot_values)
+    n_figures = ceil(n_total_values / 9)  # 9 = 3x3 grid
+    
+    # Create each figure
+    for fig_idx in range(n_figures):
+        # Get values for this figure
+        start_idx = fig_idx * 9
+        end_idx = min((fig_idx + 1) * 9, len(subplot_values))
+        values_for_fig = subplot_values[start_idx:end_idx]
+        
+        fig, axes = plt.subplots(3, 3, figsize=(12, 8))
+        axes = axes.flatten()
+        
+        # Plot each value in this figure
+        for subplot_idx, value in enumerate(values_for_fig):
+            ax = axes[subplot_idx]
+            subplot_data = df.filter(pl.col('sigma') == value)
+            
+            # Plot each fee source
+            for fee_source, (color, linestyle, label) in styles.items():
+                line_data = subplot_data.filter(
+                    (pl.col('fee_source') == fee_source)
+                ).sort(x_column)
+                
+                # Convert to numpy arrays for plotting
+                x_values = line_data.get_column(x_column).to_numpy() * x_scale
+                y_values = line_data.get_column('value').to_numpy()
+                
+                # Plot line
+                if len(y_values) > 0:
+                    ax.plot(x_values, y_values, color=color, linestyle=linestyle, 
+                           label=label if subplot_idx == 0 else "")
+                    
+                    # Find and plot optimal point
+                    optimal_idx = np.argmax(y_values)
+                    optimal_x = x_values[optimal_idx]
+                    optimal_y = y_values[optimal_idx]
+                    ax.scatter(optimal_x, optimal_y, color=color, marker='o', s=20, zorder=5)
+                    ax.axvline(x=optimal_x, color=color, linestyle=':', alpha=0.3)
+            
+            ax.set_title(f'σ = {value:.2f}')
+            ax.set_xlabel(x_label if subplot_idx >= 6 else '')  # Bottom row
+            ax.set_ylabel(f'{metric} value' if subplot_idx % 3 == 0 else '')  # Left column
+            ax.tick_params(labelsize=8)
+            ax.grid(True, alpha=0.3)
+        
+        # Remove empty subplots
+        for idx in range(len(values_for_fig), len(axes)):
+            fig.delaxes(axes[idx])
+        
+        # Create suptitle and adjust spacing for legend
+        suptitle = f'Single Step {metric.title()} Comparison'
+        fig.suptitle(suptitle, fontsize=16, y=0.95)
+        
+        # Create legend at the top of the figure
+        handles, labels = axes[0].get_legend_handles_labels()
+        fig.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.5, 0.92),
+                  ncol=2)  # Changed to 2 columns since we only have 2 lines
+        
+        plt.tight_layout()
+        plt.subplots_adjust(top=0.84)
+        plt.show()
+
 def subplot_comparison(path: str, metric: str):
     """
     Create multiple comparison plots from parquet data showing step and fee source comparisons
@@ -32,10 +123,10 @@ def subplot_comparison(path: str, metric: str):
 
     # Line styles for each combination
     styles = {
-        (1, 'in'): ('black', '-', 'Step 1 incoing'),
-        (1, 'out'): ('red', '-', 'Step 1 Outgoing'),
-        (2, 'in'): ('black', '--', 'Step 2 incoing'),
-        (2, 'out'): ('red', '--', 'Step 2 Outgoing')
+        (1, 'in'): ('black', '-', 'Step 1 incoming'),
+        (1, 'out'): ('red', '-', 'Step 1 outgoing'),
+        (2, 'in'): ('black', '--', 'Step 2 incoming'),
+        (2, 'out'): ('red', '--', 'Step 2 outgoing')
     }
     
     # Calculate number of figures needed for 5x5 grid
