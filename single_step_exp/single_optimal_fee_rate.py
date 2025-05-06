@@ -157,13 +157,13 @@ if __name__ == "__main__":
     from tqdm import tqdm
     results_df = []
     # Define parameter ranges to test
-    sigma_values = np.round(np.arange(0.1, 2.0001, 0.0001), 4)
+    sigma_values = np.round(np.arange(0.1, 0.9001, 0.0001), 4)
     base_params = {
-        'X_t': 1000,
-        'Y_t': 1000,
+        'X_t': 1,
+        'Y_t': 1,
         'S_t': 1,    # Current price
         'delta_t': 1,  # Time interval
-        'L': 1000,       # Liquidity parameter
+        'L': 1,       # Liquidity parameter
         'P_t': 1     # Target price
     }
     
