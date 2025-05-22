@@ -21,7 +21,7 @@ class BasePool:
         self._phi_cache: Dict[Tuple[float, float], float] = {}
         
     @lru_cache(maxsize=10000)
-    def phi(self, v: float, sigma: float, t: float = 1/(365*24)) -> float:
+    def phi(self, v: float, sigma: float, t: float = 1) -> float:
         """
         Cached PDF for geometric brownian motion with zero drift
         

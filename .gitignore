@@ -70,3 +70,6 @@ output/
 *.tiff
 *.ico
 *.svg
+
+/trash/
+/.cursor

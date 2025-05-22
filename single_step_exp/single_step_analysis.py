@@ -596,19 +596,19 @@ if __name__ == "__main__":
     analyzer = MetricsAnalysis()
     # Only calculate base metrics
     base_metrics = [
-        # 'expected_fee',
-        # 'pool_value',
+        'expected_fee',
+        'pool_value',
         'trader_pnl'
     ]
     analyzer.get_metrics(
-        sigmas=np.round(np.arange(0.1, 8.1, 0.1), 1),
-        fee_rates=np.linspace(0.0001, 0.9, 1000),
+        sigmas=np.array([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]),
+        fee_rates=np.linspace(0.0001, 0.9, 100),
         metrics=base_metrics,
-        output_dir='/home/shiftpub/Dynamic_AMM/output/metrics'
+        output_dir='/home/shiftpub/Dynamic_AMM/output/expected_metrics'
     )
     
     # Combine and derive additional metrics
     analyzer.combine_metrics(
-        input_dir='/home/shiftpub/Dynamic_AMM/output/metrics',
-        output_path='/home/shiftpub/Dynamic_AMM/output/combined_metrics.parquet'
+        input_dir='/home/shiftpub/Dynamic_AMM/output/expected_metrics',
+        output_path='/home/shiftpub/Dynamic_AMM/output/expected_combined_metrics.parquet'
     )

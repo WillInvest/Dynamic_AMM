@@ -25,11 +25,11 @@ def integrate_incoming_fee(L, x, gamma, p0, mu, sigma, delta_t=1/(365*24)):
         delta_y = 1/(1-gamma) * (L * np.sqrt((1-gamma) * p1) - y)
         return gamma * delta_y * gbm_pdf(p1, p0, mu, sigma)
     
-    epsilon = 1e-10
-    infinity = 3 * p0
+    epsilon = 0
+    infinity = np.inf
     
-    integral_lower, error_lower = integrate.quad(lower_integrand, epsilon, spread_lower_bound, points=1000)
-    integral_upper, error_upper = integrate.quad(upper_integrand, spread_upper_bound, infinity, points=1000)
+    integral_lower, error_lower = integrate.quad(lower_integrand, epsilon, spread_lower_bound)
+    integral_upper, error_upper = integrate.quad(upper_integrand, spread_upper_bound, infinity)
     
     return integral_lower + integral_upper
 
@@ -140,17 +140,17 @@ def analytical_pool_value(L, p0, x, gamma, sigma, mu, delta_t=1/(365*24)):
 def collect_results():
     # Calculate total iterations for overall progress tracking
     # gammas = np.round(np.arange(0.0005, 0.0205, 0.0005), 4)
-    gammas = [0.0005]
-    x_values = [1000]
+    gammas = [0.03]
+    x_values = [1]
     relative_p_values = [1]
     mu_values = [0]
-    sigma_values = np.round(np.arange(0.01, 0.21, 0.01), 2)
+    sigma_values = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
     
     total_iterations = len(gammas) * len(x_values) * len(relative_p_values) * len(mu_values) * len(sigma_values)
     print(f"Total iterations to process: {total_iterations}")
     
     results = []
-    L = 1000
+    L = 1
     
     # Create overall progress bar
     overall_pbar = tqdm(total=total_iterations, desc="Overall progress", position=0)
@@ -168,7 +168,7 @@ def collect_results():
                 p0 = 1
                 for mu in mu_values:
                     for sigma in sigma_values:
-                        delta_t = 1/(365*24)
+                        delta_t = 1
                         analytical_incoming = analytical_incoming_fee(L=L, x=x, gamma=gamma, p0=p0, mu=mu, sigma=sigma, delta_t=delta_t)
                         integrate_incoming = integrate_incoming_fee(L=L, x=x, gamma=gamma, p0=p0, mu=mu, sigma=sigma, delta_t=delta_t)
                         analytical_outgoing = analytical_outgoing_fee(L=L, x=x, gamma=gamma, p0=p0, mu=mu, sigma=sigma, delta_t=delta_t)

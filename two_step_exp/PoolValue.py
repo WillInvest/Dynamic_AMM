@@ -46,63 +46,63 @@ class PoolValues(BasePool):
             
         # Step 2 expected pool value - nine cases
         # Case 1: v1 > 1/(1-f), v2 > 1
-        def integrand_uu(v1: float, v2: float) -> float:
+        def integrand_uu(v2: float, v1: float) -> float:
             p = (self.ell_s / self.ell_r) * v1 * v2
             ls2 = self.calc.get_ls(f, (v1, 'u'), (v2, 'u'))[1]
             lr2 = self.calc.get_lr(f, (v1, 'u'), (v2, 'u'))[1]
             return self.get_pool_value(p, ls2, lr2) * self.phi(v1, sigma) * self.phi(v2, sigma)
             
         # Case 2: v1 > 1/(1-f), (1-f)^2 < v2 < 1
-        def integrand_um(v1: float, v2: float) -> float:
+        def integrand_um(v2: float, v1: float) -> float:
             p = (self.ell_s / self.ell_r) * v1 * v2
             ls2 = self.calc.get_ls(f, (v1, 'u'), (v2, 'm'))[1]
             lr2 = self.calc.get_lr(f, (v1, 'u'), (v2, 'm'))[1]
             return self.get_pool_value(p, ls2, lr2) * self.phi(v1, sigma) * self.phi(v2, sigma)
             
         # Case 3: v1 > 1/(1-f), v2 < (1-f)^2
-        def integrand_ud(v1: float, v2: float) -> float:
+        def integrand_ud(v2: float, v1: float) -> float:
             p = (self.ell_s / self.ell_r) * v1 * v2
             ls2 = self.calc.get_ls(f, (v1, 'u'), (v2, 'd'))[1]
             lr2 = self.calc.get_lr(f, (v1, 'u'), (v2, 'd'))[1]
             return self.get_pool_value(p, ls2, lr2) * self.phi(v1, sigma) * self.phi(v2, sigma)
             
         # Case 4: 1-f < v1 < 1/(1-f), v2 > 1/(v1(1-f))
-        def integrand_mu(v1: float, v2: float) -> float:
+        def integrand_mu(v2: float, v1: float) -> float:
             p = (self.ell_s / self.ell_r) * v1 * v2
             ls2 = self.calc.get_ls(f, (v1, 'm'), (v2, 'u'))[1]
             lr2 = self.calc.get_lr(f, (v1, 'm'), (v2, 'u'))[1]
             return self.get_pool_value(p, ls2, lr2) * self.phi(v1, sigma) * self.phi(v2, sigma)
             
         # Case 5: 1-f < v1 < 1/(1-f), (1-f)/v1 < v2 < 1/(v1(1-f))
-        def integrand_mm(v1: float, v2: float) -> float:
+        def integrand_mm(v2: float, v1: float) -> float:
             p = (self.ell_s / self.ell_r) * v1 * v2
             ls2 = self.calc.get_ls(f, (v1, 'm'), (v2, 'm'))[1]
             lr2 = self.calc.get_lr(f, (v1, 'm'), (v2, 'm'))[1]
             return self.get_pool_value(p, ls2, lr2) * self.phi(v1, sigma) * self.phi(v2, sigma)
             
         # Case 6: 1-f < v1 < 1/(1-f), v2 < (1-f)/v1
-        def integrand_md(v1: float, v2: float) -> float:
+        def integrand_md(v2: float, v1: float) -> float:
             p = (self.ell_s / self.ell_r) * v1 * v2
             ls2 = self.calc.get_ls(f, (v1, 'm'), (v2, 'd'))[1]
             lr2 = self.calc.get_lr(f, (v1, 'm'), (v2, 'd'))[1]
             return self.get_pool_value(p, ls2, lr2) * self.phi(v1, sigma) * self.phi(v2, sigma)
             
         # Case 7: v1 < 1-f, v2 > 1/(1-f)^2
-        def integrand_du(v1: float, v2: float) -> float:
+        def integrand_du(v2: float, v1: float) -> float:
             p = (self.ell_s / self.ell_r) * v1 * v2
             ls2 = self.calc.get_ls(f, (v1, 'd'), (v2, 'u'))[1]
             lr2 = self.calc.get_lr(f, (v1, 'd'), (v2, 'u'))[1]
             return self.get_pool_value(p, ls2, lr2) * self.phi(v1, sigma) * self.phi(v2, sigma)
             
         # Case 8: v1 < 1-f, 1 < v2 < 1/(1-f)^2
-        def integrand_dm(v1: float, v2: float) -> float:
+        def integrand_dm(v2: float, v1: float) -> float:
             p = (self.ell_s / self.ell_r) * v1 * v2
             ls2 = self.calc.get_ls(f, (v1, 'd'), (v2, 'm'))[1]
             lr2 = self.calc.get_lr(f, (v1, 'd'), (v2, 'm'))[1]
             return self.get_pool_value(p, ls2, lr2) * self.phi(v1, sigma) * self.phi(v2, sigma)
             
         # Case 9: v1 < 1-f, v2 < 1
-        def integrand_dd(v1: float, v2: float) -> float:
+        def integrand_dd(v2: float, v1: float) -> float:
             p = (self.ell_s / self.ell_r) * v1 * v2
             ls2 = self.calc.get_ls(f, (v1, 'd'), (v2, 'd'))[1]
             lr2 = self.calc.get_lr(f, (v1, 'd'), (v2, 'd'))[1]

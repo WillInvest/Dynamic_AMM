@@ -39,42 +39,42 @@ class ArbitrageurRevenue(BasePool):
             
         # Step 2 expected arbitrageur revenue - nine cases
         # Case 1: v1 > 1/(1-f), v2 > 1
-        def integrand_uu(v1: float, v2: float) -> float:
+        def integrand_uu(v2: float, v1: float) -> float:
             p = (self.ell_s / self.ell_r) * v1 * v2
             delta_s2 = self.calc.get_delta_s(f, fee_source, (v1, 'u'), (v2, 'u'))[1]
             delta_r2 = self.calc.get_delta_r(f, fee_source, (v1, 'u'), (v2, 'u'))[1]
             return self.get_arb_revenue(f, p, delta_s2, delta_r2, 'u', fee_source) * self.phi(v1, sigma) * self.phi(v2, sigma)
             
         # Case 2: v1 > 1/(1-f), v2 < (1-f)^2
-        def integrand_ud(v1: float, v2: float) -> float:
+        def integrand_ud(v2: float, v1: float) -> float:
             p = (self.ell_s / self.ell_r) * v1 * v2
             delta_s2 = self.calc.get_delta_s(f, fee_source, (v1, 'u'), (v2, 'd'))[1]
             delta_r2 = self.calc.get_delta_r(f, fee_source, (v1, 'u'), (v2, 'd'))[1]
             return self.get_arb_revenue(f, p, delta_s2, delta_r2, 'd', fee_source) * self.phi(v1, sigma) * self.phi(v2, sigma)
             
         # Case 3: 1-f < v1 < 1/(1-f), v2 > 1/(v1(1-f))
-        def integrand_mu(v1: float, v2: float) -> float:
+        def integrand_mu(v2: float, v1: float) -> float:
             p = (self.ell_s / self.ell_r) * v1 * v2
             delta_s2 = self.calc.get_delta_s(f, fee_source, (v1, 'm'), (v2, 'u'))[1]
             delta_r2 = self.calc.get_delta_r(f, fee_source, (v1, 'm'), (v2, 'u'))[1]
             return self.get_arb_revenue(f, p, delta_s2, delta_r2, 'u', fee_source) * self.phi(v1, sigma) * self.phi(v2, sigma)
             
         # Case 4: 1-f < v1 < 1/(1-f), v2 < (1-f)/v1
-        def integrand_md(v1: float, v2: float) -> float:
+        def integrand_md(v2: float, v1: float) -> float:
             p = (self.ell_s / self.ell_r) * v1 * v2
             delta_s2 = self.calc.get_delta_s(f, fee_source, (v1, 'm'), (v2, 'd'))[1]
             delta_r2 = self.calc.get_delta_r(f, fee_source, (v1, 'm'), (v2, 'd'))[1]
             return self.get_arb_revenue(f, p, delta_s2, delta_r2, 'd', fee_source) * self.phi(v1, sigma) * self.phi(v2, sigma)
             
         # Case 5: v1 < 1-f, v2 > 1/(1-f)^2
-        def integrand_du(v1: float, v2: float) -> float:
+        def integrand_du(v2: float, v1: float) -> float:
             p = (self.ell_s / self.ell_r) * v1 * v2
             delta_s2 = self.calc.get_delta_s(f, fee_source, (v1, 'd'), (v2, 'u'))[1]
             delta_r2 = self.calc.get_delta_r(f, fee_source, (v1, 'd'), (v2, 'u'))[1]
             return self.get_arb_revenue(f, p, delta_s2, delta_r2, 'u', fee_source) * self.phi(v1, sigma) * self.phi(v2, sigma)
             
         # Case 6: v1 < 1-f, v2 < 1
-        def integrand_dd(v1: float, v2: float) -> float:
+        def integrand_dd(v2: float, v1: float) -> float:
             p = (self.ell_s / self.ell_r) * v1 * v2
             delta_s2 = self.calc.get_delta_s(f, fee_source, (v1, 'd'), (v2, 'd'))[1]
             delta_r2 = self.calc.get_delta_r(f, fee_source, (v1, 'd'), (v2, 'd'))[1]
