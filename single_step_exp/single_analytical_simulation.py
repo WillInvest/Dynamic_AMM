@@ -126,16 +126,37 @@ def integrate_pool_value(L, x, gamma, p0, mu, sigma, delta_t=1/(365*24)):
     
     return integral_lower + integral_mid + integral_upper
 
-def analytical_pool_value(L, p0, x, gamma, sigma, mu, delta_t=1/(365*24)):
-    y = L**2 / x
+# def analytical_pool_value(L, p0, x, gamma, sigma, mu, delta_t=1/(365*24)):
+#     y = L**2 / x
     
-    d1 = (np.log((1-gamma) * y / (p0 * x)) - mu * delta_t) / (sigma * np.sqrt(delta_t))
-    d2 = (np.log(y / ((1-gamma) * x * p0)) - mu * delta_t) / (sigma * np.sqrt(delta_t))
+#     d1 = (np.log((1-gamma) * y / (p0 * x)) - mu * delta_t) / (sigma * np.sqrt(delta_t))
+#     d2 = (np.log(y / ((1-gamma) * x * p0)) - mu * delta_t) / (sigma * np.sqrt(delta_t))
     
-    beta = L * (2-gamma) * np.sqrt(p0/(1-gamma)) * np.exp(mu/2 - sigma**2/8 * delta_t)
+#     beta = L * (2-gamma) * np.sqrt(p0/(1-gamma)) * np.exp(mu/2 - sigma**2/8 * delta_t)
         
-    return beta * (norm.cdf(d1) + norm.cdf(-d2)) + (p0*x + y) * (norm.cdf(d2+sigma*np.sqrt(delta_t)/2) - norm.cdf(d1+sigma*np.sqrt(delta_t)/2))
+#     return beta * (norm.cdf(d1) + norm.cdf(-d2)) + (p0*x + y) * (norm.cdf(d2+sigma*np.sqrt(delta_t)/2) - norm.cdf(d1+sigma*np.sqrt(delta_t)/2))
 
+
+def analytical_pool_value(gamma, sigma, L=1, p0=1, x=1, delta_t=1/(365*24)):
+    y = L**2 / x
+    sigma_sqrt_dt = sigma * np.sqrt(delta_t)
+    lambda_1 = y / ((1 - gamma) * p0 * x)
+    lambda_2 = (1 - gamma) * y / (p0 * x)
+    
+    # Calculate D terms
+    D1 = (1 / sigma_sqrt_dt) * np.log(lambda_1) 
+    D2 = (1 / sigma_sqrt_dt) * np.log(lambda_2) 
+    D1_plus = (1 / sigma_sqrt_dt) * (np.log(lambda_1) + 0.5 * sigma**2 * delta_t)
+    D1_minus = (1 / sigma_sqrt_dt) * (np.log(lambda_1) - 0.5 * sigma**2 * delta_t)
+    D2_plus = (1 / sigma_sqrt_dt) * (np.log(lambda_2) + 0.5 * sigma**2 * delta_t)
+    D2_minus = (1 / sigma_sqrt_dt) * (np.log(lambda_2) - 0.5 * sigma**2 * delta_t)
+    
+    beta = L * (2-gamma) * np.sqrt(p0/(1-gamma)) * np.exp(-sigma**2/8 * delta_t)
+    
+    first_term = beta * (norm.cdf(-D1) + norm.cdf(D2))
+    second_term = y * (norm.cdf(D1_plus) - norm.cdf(D2_plus)) + \
+        x * p0 * (norm.cdf(D1_minus) - norm.cdf(D2_minus))
+    return first_term + second_term
 
 def collect_results():
     # Calculate total iterations for overall progress tracking
