@@ -4,6 +4,8 @@ from scipy import optimize
 from scipy.stats import norm
 import matplotlib.pyplot as plt
 
+time_scale = 1/365/24/60/60 # 1 second
+
 def fee_in_optimization(params):
     """Find optimal gamma to maximize the incoming fee using two methods.
     
@@ -16,7 +18,8 @@ def fee_in_optimization(params):
     S_t = params['S_t']
     X_t = params['X_t']
     Y_t = params['Y_t']
-    sigma = params['sigma']
+    annual_sigma = params['sigma']
+    sigma = annual_sigma * np.sqrt(time_scale)
     delta_t = params['delta_t']
     L = params['L']
     P_t = params['P_t']
@@ -121,28 +124,14 @@ def fee_in_optimization(params):
             return np.inf  # Invalid range
         return -fee_out(gamma)
     
-    def optimization_equation(gamma):
-        """Equation that should be zero at the optimal gamma."""
-        if gamma <= 0 or gamma >= 1:
-            return np.inf  # Invalid range
-        return Fin(gamma) + gamma * (1 - gamma) * dFin(gamma)
-    
     # Method 1: Direct optimization of Fee_in
-    result_in = optimize.minimize_scalar(objective_in, bounds=(0.0001, 0.9999), method='bounded')
+    result_in = optimize.minimize_scalar(objective_in, bounds=(1e-10, 0.9999), method='bounded')
     gamma_opt_in = result_in.x
     max_fee_in = -result_in.fun
     
-    result_out = optimize.minimize_scalar(objective_out, bounds=(0.0001, 0.9999), method='bounded')
+    result_out = optimize.minimize_scalar(objective_out, bounds=(1e-10, 0.9999), method='bounded')
     gamma_opt_out = result_out.x
     max_fee_out = -result_out.fun
-    
-    # # Method 2: Find root of the optimization equation
-    # try:
-    #     gamma_opt2 = optimize.brentq(optimization_equation, 0.0001, 0.9999)
-    #     max_fee2 = fee_in(gamma_opt2)
-    # except:
-    #     gamma_opt2 = None
-    #     max_fee2 = -np.inf
     
     # Return results from both methods
     return {
@@ -159,11 +148,11 @@ if __name__ == "__main__":
     # Define parameter ranges to test
     sigma_values = np.round(np.arange(0.1, 0.9001, 0.0001), 4)
     base_params = {
-        'X_t': 1,
-        'Y_t': 1,
+        'X_t': 1e6,
+        'Y_t': 1e6,
         'S_t': 1,    # Current price
-        'delta_t': 1,  # Time interval
-        'L': 1,       # Liquidity parameter
+        'delta_t': 12 * time_scale,  # Time interval
+        'L': 1e6,       # Liquidity parameter
         'P_t': 1     # Target price
     }
     
@@ -199,21 +188,21 @@ if __name__ == "__main__":
     ax1.set_xlabel('Sigma (σ)')
     ax1.set_ylabel('Optimal Fee (γ)', color='blue')
     ax1.tick_params(axis='y', labelcolor='blue')
-    
+    ax1.legend(loc='upper left')
     # Create second y-axis for fee
-    ax2 = ax1.twinx()
-    ax2.plot(results_df['sigma'], results_df['opt_fee_in'], color='red', label='Fee Revenue In')
-    ax2.plot(results_df['sigma'], results_df['opt_fee_out'], color='orange', label='Fee Revenue Out')
-    ax2.set_ylabel('Fee Revenue', color='red')
-    ax2.tick_params(axis='y', labelcolor='red')
+    # ax2 = ax1.twinx()
+    # ax2.plot(results_df['sigma'], results_df['opt_fee_in'], color='red', label='Fee Revenue In')
+    # ax2.plot(results_df['sigma'], results_df['opt_fee_out'], color='orange', label='Fee Revenue Out')
+    # ax2.set_ylabel('Fee Revenue', color='red')
+    # ax2.tick_params(axis='y', labelcolor='red')
     
     # Add title and legend
     plt.title('Optimal Gamma and Fee Revenue vs Sigma')
     
     # Add legend
-    lines1, labels1 = ax1.get_legend_handles_labels()
-    lines2, labels2 = ax2.get_legend_handles_labels()
-    ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper right')
+    # lines1, labels1 = ax1.get_legend_handles_labels()
+    # lines2, labels2 = ax2.get_legend_handles_labels()
+    # ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper right')
     
     # Add grid
     ax1.grid(True, alpha=0.3)

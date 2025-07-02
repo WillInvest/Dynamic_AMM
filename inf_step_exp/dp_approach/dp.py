@@ -2,9 +2,8 @@
 
 import numpy as np
 import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
 from tqdm import tqdm
+from config import *
 
 class DPAMM:
     def __init__(self, nS, nY, nG, T,
@@ -31,7 +30,6 @@ class DPAMM:
         self.init_value_function()
         
     def init_grid(self, smax, smin, ymax, ymin, gmax, gmin):
-        print("Initializing grid...")
         self.S_grid = np.linspace(smin, smax, self.nS)
         self.Y_grid = np.linspace(ymin, ymax, self.nY)
         self.gamma_grid = np.linspace(gmin, gmax, self.nG)
@@ -46,7 +44,6 @@ class DPAMM:
         self.cont_value = np.zeros_like(self.S_mesh)
         
     def init_transition_probs(self):
-        print("Initializing transition probabilities...")
         def transition_prob(s0, s1):
             if self.price_dynamics == 'GBM':
                 return (1 / (s1 * self.sigma * np.sqrt(2 * np.pi * self.dt))) * \
@@ -60,7 +57,6 @@ class DPAMM:
             self.transition_probs[i] /= self.transition_probs[i].sum()
         
     def init_value_function(self):
-        print("Initializing value function...")
         self.V = np.zeros((self.nS, self.nY))
         for i in range(self.nS):
             for j in range(self.nY):
@@ -83,19 +79,23 @@ class DPAMM:
                 (self.L * np.sqrt((1 - self.G_mesh[self.cond1]) * self.S_mesh[self.cond1]) - self.Y_mesh[self.cond1])
             self.fee[self.cond2] = self.G_mesh[self.cond2] / (1 - self.G_mesh[self.cond2]) *\
                 (self.L * np.sqrt((1 - self.G_mesh[self.cond2]) / self.S_mesh[self.cond2]) - self.L**2 / self.Y_mesh[self.cond2])
+            self.fee[self.cond3] = 0
         else:
             self.fee[self.cond1] = self.gamma / (1 - self.gamma) *\
                 (self.L * np.sqrt((1 - self.gamma) * self.S_mesh[self.cond1]) - self.Y_mesh[self.cond1])
             self.fee[self.cond2] = self.gamma / (1 - self.gamma) *\
                 (self.L * np.sqrt((1 - self.gamma) / self.S_mesh[self.cond2]) - self.L**2 / self.Y_mesh[self.cond2])
-                
+            self.fee[self.cond3] = 0
+            
     def update_y_next(self):
         if self.dynamic_fee:
             self.y_next[self.cond1] = self.L * np.sqrt((1 - self.G_mesh[self.cond1]) * self.S_mesh[self.cond1])
             self.y_next[self.cond2] = self.L * np.sqrt(self.S_mesh[self.cond2] / (1 - self.G_mesh[self.cond2]))
+            self.y_next[self.cond3] = self.Y_mesh[self.cond3]
         else:
             self.y_next[self.cond1] = self.L * np.sqrt((1 - self.gamma) * self.S_mesh[self.cond1])
             self.y_next[self.cond2] = self.L * np.sqrt(self.S_mesh[self.cond2] / (1 - self.gamma))
+            self.y_next[self.cond3] = self.Y_mesh[self.cond3]
             
     def update_cont_value(self):
         if self.dynamic_fee:
@@ -106,7 +106,7 @@ class DPAMM:
             l_grid = np.abs(self.Y_grid[None, None, :] - self.y_next[..., None]).argmin(axis=-1)
             for j in range(self.nS):
                 self.cont_value[j] = np.dot(self.V[:, l_grid[j]].transpose(1, 0), self.transition_probs[j])
-    
+
     def update_value_function(self):
         progress_bar = tqdm(total=self.T, desc="Dynamic Programming")
         for t in reversed(range(self.T)):
@@ -132,33 +132,33 @@ class DPAMM:
     def save_value_gamma(self):
         V_df = pd.DataFrame(self.V)
         if self.dynamic_fee:
-            V_df.to_csv('V_dynamic_gamma.csv', index=False)
+            V_df.to_csv(f'results/steps_{self.T}/V_dynamic_gamma.csv', index=False)
             best_gamma_df = pd.DataFrame(self.best_gamma)
-            best_gamma_df.to_csv('best_gamma_dynamic_gamma.csv', index=False)
+            best_gamma_df.to_csv(f'results/steps_{self.T}/best_gamma.csv', index=False)
         else:
-            V_df.to_csv('V_fix_gamma.csv', index=False)
+            V_df.to_csv(f'results/steps_{self.T}/V_fix_gamma.csv', index=False)
+            
+        PV0 = np.zeros((self.nS, self.nY))
+
+        for j in range(self.nS):
+            for k in range(self.nY):
+                PV0[j, k] = (self.L**2 * self.S_grid[j] + self.Y_grid[k]**2) / self.Y_grid[k]
+
+        PV0_df = pd.DataFrame(PV0)
         
+        PV0_df.to_csv(f'results/steps_{self.T}/initial_pool_value.csv', index=False)
         
 
 # %%
 if __name__ == "__main__":
-    nS = 100
-    nY = 100
-    nG = 100
-    T = 200
-    L = 1.0
-    gamma = 0.01
-    sigma = 0.2
-    dt = 1/252
-    smax = 1.5
-    smin = 0.5
-    ymax = 1.5
-    ymin = 0.5
-    gmax = 0.01
-    gmin = 0.0005
+    import os
     
-    dp = DPAMM(nS, nY, nG, T, L, gamma, sigma, dt,
-               smax, smin, ymax, ymin, gmax, gmin)
-    dp.update_value_function()
+    # for T in [10000, 20000, 50000, 100000, 200000, 500000, 1000000]:
+    # for T in [100, 200, 500, 1000, 2000, 5000]:
+    for T in [100]:
+        os.makedirs(f'results/steps_{T}', exist_ok=True)
+        dp = DPAMM(nS, nY, nG, T, L, gamma, sigma, dt,
+                smax, smin, ymax, ymin, gmax, gmin)
+        dp.update_value_function()
     
 # %%
