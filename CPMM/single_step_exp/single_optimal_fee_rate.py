@@ -4,8 +4,6 @@ from scipy import optimize
 from scipy.stats import norm
 import matplotlib.pyplot as plt
 
-time_scale = 1/365/24/60/60 # 1 second
-
 def fee_in_optimization(params):
     """Find optimal gamma to maximize the incoming fee using two methods.
     
@@ -18,8 +16,7 @@ def fee_in_optimization(params):
     S_t = params['S_t']
     X_t = params['X_t']
     Y_t = params['Y_t']
-    annual_sigma = params['sigma']
-    sigma = annual_sigma * np.sqrt(time_scale)
+    sigma = params['sigma']
     delta_t = params['delta_t']
     L = params['L']
     P_t = params['P_t']
@@ -59,6 +56,7 @@ def fee_in_optimization(params):
         term1 = a * (norm.cdf(d1(gamma)) + norm.cdf(-d2(gamma)))
         term2 = S_t * X_t * norm.cdf(d1_minus(gamma))
         term3 = Y_t * norm.cdf(-d2_plus(gamma))
+
         return term1 - term2 - term3
     
     def Fout(gamma):
@@ -125,11 +123,11 @@ def fee_in_optimization(params):
         return -fee_out(gamma)
     
     # Method 1: Direct optimization of Fee_in
-    result_in = optimize.minimize_scalar(objective_in, bounds=(1e-10, 0.9999), method='bounded')
+    result_in = optimize.minimize_scalar(objective_in, bounds=(1e-5, 0.0005), method='bounded', options={'xatol': 1e-120})
     gamma_opt_in = result_in.x
     max_fee_in = -result_in.fun
     
-    result_out = optimize.minimize_scalar(objective_out, bounds=(1e-10, 0.9999), method='bounded')
+    result_out = optimize.minimize_scalar(objective_out, bounds=(1e-5, 0.0005), method='bounded', options={'xatol': 1e-120})
     gamma_opt_out = result_out.x
     max_fee_out = -result_out.fun
     
@@ -143,15 +141,16 @@ def fee_in_optimization(params):
     
     
 if __name__ == "__main__":
+    
     from tqdm import tqdm
     results_df = []
     # Define parameter ranges to test
-    sigma_values = np.round(np.arange(0.1, 0.9001, 0.0001), 4)
+    sigma_values = np.round(np.arange(0.101, 1.1, 0.001), 4)
     base_params = {
         'X_t': 1e6,
         'Y_t': 1e6,
         'S_t': 1,    # Current price
-        'delta_t': 12 * time_scale,  # Time interval
+        'delta_t': 12/365/24/60/60,  # Time interval
         'L': 1e6,       # Liquidity parameter
         'P_t': 1     # Target price
     }
@@ -211,4 +210,3 @@ if __name__ == "__main__":
     plt.savefig('gamma_fee_plot.png', dpi=300, bbox_inches='tight')
     plt.close()
     print("Plot saved as 'gamma_fee_plot.png'")
-  

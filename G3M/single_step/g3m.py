@@ -5,7 +5,7 @@ import pandas as pd
 
 def calculate_G3M_single_step_fees(sigma: float, w: float, gamma: float,
                                    pv0: float = 1.0, L: float = 1.0, 
-                                   delta_t: float = 1.0) -> float:
+                                   delta_t: float = 12/(365*24*60*60)) -> float:
     """
     Calculate the total expected fees from both tokens X and Y in the G3M model.
     
@@ -79,7 +79,7 @@ def calculate_G3M_single_step_fees(sigma: float, w: float, gamma: float,
 
 def calculate_G3M_expected_pool_value(sigma: float, w: float, gamma: float,
                                      pv0: float = 1.0, L: float = 1.0, 
-                                     delta_t: float = 1.0) -> float:
+                                     delta_t: float = 12/(365*24*60*60)) -> float:
     """
     Calculate the expected pool value E[PV_{t+1}] for the G3M model.
     
@@ -132,7 +132,8 @@ def calculate_G3M_expected_pool_value(sigma: float, w: float, gamma: float,
 
 def calculate_G3M_expected_fee(sigma: float, w: float, gamma: float,
                               pv0: float = 1.0, L: float = 1.0, 
-                              delta_t: float = 1.0) -> float:
+                              delta_t: float = 12/(365*24*60*60),
+                              theta: float = 0) -> float:
     """
     Calculate the expected fee E[F_{t+1}] for the G3M model.
     
@@ -152,7 +153,7 @@ def calculate_G3M_expected_fee(sigma: float, w: float, gamma: float,
     gamma_term = gamma / (1 - gamma)
     x_t = (L/((1-w)*pv0)**(1-w))**(1/w)
     y_t = (1-w) * pv0
-    S_t = (w / (1 - w)) * (y_t / x_t)
+    S_t = (w / (1 - w)) * (y_t / x_t) * (1 - gamma) ** theta
     
     # Calculate π₁ and π₂
     pi_1 = (1 - w) / (w * (1 - gamma))
@@ -250,3 +251,25 @@ def find_optimal_gamma_with_optimizer():
     return results_df
 
 
+#%%
+L = 1e6
+pv0 = 2e6
+delta_t = 12/(365*24*60*60)
+sigma = 1
+w = 0.5
+gamma = 0.0003
+
+incoming_fee, outgoing_fee = calculate_G3M_expected_fee(sigma, w, gamma, pv0, L, delta_t, theta=-1)
+
+print(f"incoming_fee: {incoming_fee:.8f}, outgoing_fee: {outgoing_fee:.8f}")
+
+
+
+
+#%%
+
+
+
+
+
+incoming_fee, outgoing_fee = calculate_G3M_expected_fee(0.1, 0.5, 0.0003)
