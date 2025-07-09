@@ -104,7 +104,7 @@ if __name__ == "__main__":
     import os
     
     # Create results directory if it doesn't exist
-    results_path = 'results'
+    results_path = '/home/shiftpub/Dynamic_AMM/CPMM/TwoStep/results'
     os.makedirs(results_path, exist_ok=True)
     
     # Define sigma values to test
