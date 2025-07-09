@@ -73,7 +73,7 @@ class TwoStepIntegrate:
         x1 = x0 / np.sqrt((1-self.gamma)*v1)
         y1 = y0 * np.sqrt((1-self.gamma)*v1)
         delta_x = 1/(1-self.gamma) * (x0 * np.sqrt((1-self.gamma)/vv) - x1)
-        assert delta_x >= 0, f"delta_x is negative: {delta_x}"
+        assert delta_x >= 0, f"delta_x is negative: {delta_x}, v1: {v1}, v2: {v2}, gamma: {self.gamma}, x0: {x0}, y0: {y0}, x1: {x1}, y1: {y1}, p2: {p2}, vv: {vv}"
         assert abs(x1 * y1 - x0 * y0) < self.eps, f"x1 * y1 != x0 * y0: {x1 * y1} != {x0 * y0}"
         return self.gamma * delta_x * p2 * self.dist.pdf(v1) * self.dist.pdf(v2)
     
@@ -319,10 +319,13 @@ class TwoStepIntegrate:
         # Define the integration bounds
         v1_lower = 1 - self.gamma
         v1_upper = 1 / (1 - self.gamma)
+        epsilon = 1e-12
+        lb = self.dist.ppf(epsilon / 2)
+        ub = self.dist.ppf(1 - epsilon / 2)
         
         # Perform the integration over all three regions
-        result_u, _ = integrate.quad(self.fee_integrand_u, v1_upper, np.inf)
-        result_d, _ = integrate.quad(self.fee_integrand_d, 0, v1_lower)
+        result_u, _ = integrate.quad(self.fee_integrand_u, v1_upper, ub)
+        result_d, _ = integrate.quad(self.fee_integrand_d, lb, v1_lower)
         
         return result_u + result_d
     
@@ -333,11 +336,14 @@ class TwoStepIntegrate:
         # Define the integration bounds
         v1_lower = 1 - self.gamma
         v1_upper = 1 / (1 - self.gamma)
+        epsilon = 1e-12
+        lb = self.dist.ppf(epsilon / 2)
+        ub = self.dist.ppf(1 - epsilon / 2)
         
         # Perform the integration over all three regions
-        result_u, _ = integrate.quad(self.pv_integrand_u, v1_upper, np.inf)
+        result_u, _ = integrate.quad(self.pv_integrand_u, v1_upper, ub)
         result_m, _ = integrate.quad(self.pv_integrand_m, v1_lower, v1_upper)
-        result_d, _ = integrate.quad(self.pv_integrand_d, 0, v1_lower)
+        result_d, _ = integrate.quad(self.pv_integrand_d, lb, v1_lower)
         
         return result_u + result_m + result_d
     
@@ -345,15 +351,23 @@ class TwoStepIntegrate:
         """
         Calculate the expected fee revenue for a two step
         """
-        inf = np.inf
-        zero = 1e-6
+        epsilon = 1e-6
+        lb = self.dist.ppf(epsilon / 2) * (1-self.gamma)**2
+        ub = self.dist.ppf(1 - epsilon / 2)/(1-self.gamma)**2
         
-        result_uu, _ = integrate.dblquad(self.fee_integrand_uu, 1/(1-self.gamma), inf, lambda v1: 1, lambda v1: inf, epsabs=1e-6, epsrel=1e-6)
-        result_ud, _ = integrate.dblquad(self.fee_integrand_ud, 1/(1-self.gamma), inf, lambda v1: zero, lambda v1: (1-self.gamma)**2, epsabs=1e-6, epsrel=1e-6)
-        result_mu, _ = integrate.dblquad(self.fee_integrand_mu, 1-self.gamma, 1/(1-self.gamma), lambda v1: 1/(v1*(1-self.gamma)), lambda v1: inf, epsabs=1e-6, epsrel=1e-6)
-        result_md, _ = integrate.dblquad(self.fee_integrand_md, 1-self.gamma, 1/(1-self.gamma), lambda v1: zero, lambda v1: (1-self.gamma)/v1, epsabs=1e-6, epsrel=1e-6)
-        result_du, _ = integrate.dblquad(self.fee_integrand_du, zero, 1-self.gamma, lambda v1: 1/(1-self.gamma)**2, lambda v1: inf, epsabs=1e-6, epsrel=1e-6)
-        result_dd, _ = integrate.dblquad(self.fee_integrand_dd, zero, 1-self.gamma, lambda v1: zero, lambda v1: 1, epsabs=1e-6, epsrel=1e-6)
+        result_uu, _ = integrate.dblquad(self.fee_integrand_uu, 1/(1-self.gamma), ub, lambda v1: 1, lambda v1: v1 * ub, epsabs=1e-12, epsrel=1e-12)
+        result_ud, _ = integrate.dblquad(self.fee_integrand_ud, 1/(1-self.gamma), ub, lambda v1: lb * (1-self.gamma)**2, lambda v1: (1-self.gamma)**2, epsabs=1e-12, epsrel=1e-12)
+        result_mu, _ = integrate.dblquad(self.fee_integrand_mu, 1-self.gamma, 1/(1-self.gamma), lambda v1: 1/(v1*(1-self.gamma)), lambda v1: ub/(v1*(1-self.gamma)), epsabs=1e-12, epsrel=1e-12)
+        result_md, _ = integrate.dblquad(self.fee_integrand_md, 1-self.gamma, 1/(1-self.gamma), lambda v1: lb*(1-self.gamma)/v1, lambda v1: (1-self.gamma)/v1, epsabs=1e-12, epsrel=1e-12)
+        result_du, _ = integrate.dblquad(self.fee_integrand_du, lb, 1-self.gamma, lambda v1: 1/(1-self.gamma)**2, lambda v1: ub/(1-self.gamma)**2, epsabs=1e-12, epsrel=1e-12)
+        result_dd, _ = integrate.dblquad(self.fee_integrand_dd, lb, 1-self.gamma, lambda v1: v1 * lb, lambda v1: 1, epsabs=1e-12, epsrel=1e-12)
+        
+        # result_uu, _ = integrate.dblquad(self.fee_integrand_uu, 1/(1-self.gamma), ub, lambda v1: 1, lambda v1: ub, epsabs=1e-12, epsrel=1e-12)
+        # result_ud, _ = integrate.dblquad(self.fee_integrand_ud, 1/(1-self.gamma), ub, lambda v1: lb, lambda v1: (1-self.gamma)**2, epsabs=1e-12, epsrel=1e-12)
+        # result_mu, _ = integrate.dblquad(self.fee_integrand_mu, 1-self.gamma, 1/(1-self.gamma), lambda v1: 1/(v1*(1-self.gamma)), lambda v1: ub, epsabs=1e-12, epsrel=1e-12)
+        # result_md, _ = integrate.dblquad(self.fee_integrand_md, 1-self.gamma, 1/(1-self.gamma), lambda v1: lb, lambda v1: (1-self.gamma)/v1, epsabs=1e-12, epsrel=1e-12)
+        # result_du, _ = integrate.dblquad(self.fee_integrand_du, lb, 1-self.gamma, lambda v1: 1/(1-self.gamma)**2, lambda v1: ub, epsabs=1e-12, epsrel=1e-12)
+        # result_dd, _ = integrate.dblquad(self.fee_integrand_dd, lb, 1-self.gamma, lambda v1: lb, lambda v1: 1, epsabs=1e-12, epsrel=1e-12)
         
         # assert all results are positive
         assert result_uu >= 0, f"fee_uu is negative: {result_uu}"
@@ -369,18 +383,30 @@ class TwoStepIntegrate:
         """
         Calculate the pool value for a two step
         """
-        inf = np.inf
-        zero = 1e-6
+        epsilon = 1e-6
+        lb = self.dist.ppf(epsilon / 2) * (1-self.gamma)**2
+        ub = self.dist.ppf(1 - epsilon / 2)/(1-self.gamma)**2
         
-        result_uu, _ = integrate.dblquad(self.pv_integrand_uu, 1/(1-self.gamma), inf, lambda v1: 1, lambda v1: inf, epsabs=1e-6, epsrel=1e-6)
-        result_um, _ = integrate.dblquad(self.pv_integrand_um, 1/(1-self.gamma), inf, lambda v1: (1-self.gamma)**2, lambda v1: 1, epsabs=1e-6, epsrel=1e-6)
-        result_ud, _ = integrate.dblquad(self.pv_integrand_ud, 1/(1-self.gamma), inf, lambda v1: zero, lambda v1: (1-self.gamma)**2, epsabs=1e-6, epsrel=1e-6)
-        result_mu, _ = integrate.dblquad(self.pv_integrand_mu, 1-self.gamma, 1/(1-self.gamma), lambda v1: 1/(v1*(1-self.gamma)), lambda v1: inf, epsabs=1e-6, epsrel=1e-6)
-        result_mm, _ = integrate.dblquad(self.pv_integrand_mm, 1-self.gamma, 1/(1-self.gamma), lambda v1: (1-self.gamma)/v1, lambda v1: 1/(v1*(1-self.gamma)), epsabs=1e-6, epsrel=1e-6)
-        result_md, _ = integrate.dblquad(self.pv_integrand_md, 1-self.gamma, 1/(1-self.gamma), lambda v1: zero, lambda v1: (1-self.gamma)/v1, epsabs=1e-6, epsrel=1e-6)
-        result_du, _ = integrate.dblquad(self.pv_integrand_du, zero, 1-self.gamma, lambda v1: 1/(1-self.gamma)**2, lambda v1: inf, epsabs=1e-6, epsrel=1e-6)
-        result_dm, _ = integrate.dblquad(self.pv_integrand_dm, zero, 1-self.gamma, lambda v1: 1, lambda v1: 1/(1-self.gamma)**2, epsabs=1e-6, epsrel=1e-6)
-        result_dd, _ = integrate.dblquad(self.pv_integrand_dd, zero, 1-self.gamma, lambda v1: zero, lambda v1: 1, epsabs=1e-6, epsrel=1e-6)
+        result_uu, _ = integrate.dblquad(self.pv_integrand_uu, 1/(1-self.gamma), ub, lambda v1: 1, lambda v1: v1 * ub, epsabs=1e-12, epsrel=1e-12)
+        result_um, _ = integrate.dblquad(self.pv_integrand_um, 1/(1-self.gamma), ub, lambda v1: (1-self.gamma)**2, lambda v1: 1, epsabs=1e-12, epsrel=1e-12)
+        result_ud, _ = integrate.dblquad(self.pv_integrand_ud, 1/(1-self.gamma), ub, lambda v1: lb * (1-self.gamma)**2, lambda v1: (1-self.gamma)**2, epsabs=1e-12, epsrel=1e-12)
+        result_mu, _ = integrate.dblquad(self.pv_integrand_mu, 1-self.gamma, 1/(1-self.gamma), lambda v1: 1/(v1*(1-self.gamma)), lambda v1: ub/(v1*(1-self.gamma)), epsabs=1e-12, epsrel=1e-12)
+        result_mm, _ = integrate.dblquad(self.pv_integrand_mm, 1-self.gamma, 1/(1-self.gamma), lambda v1: (1-self.gamma)/v1, lambda v1: 1/(v1*(1-self.gamma)), epsabs=1e-12, epsrel=1e-12)
+        result_md, _ = integrate.dblquad(self.pv_integrand_md, 1-self.gamma, 1/(1-self.gamma), lambda v1: lb*(1-self.gamma)/v1, lambda v1: (1-self.gamma)/v1, epsabs=1e-12, epsrel=1e-12)
+        result_du, _ = integrate.dblquad(self.pv_integrand_du, lb, 1-self.gamma, lambda v1: 1/(1-self.gamma)**2, lambda v1: ub/(1-self.gamma)**2, epsabs=1e-12, epsrel=1e-12)
+        result_dm, _ = integrate.dblquad(self.pv_integrand_dm, lb, 1-self.gamma, lambda v1: 1, lambda v1: 1/(1-self.gamma)**2, epsabs=1e-12, epsrel=1e-12)
+        result_dd, _ = integrate.dblquad(self.pv_integrand_dd, lb, 1-self.gamma, lambda v1: v1 * lb, lambda v1: 1, epsabs=1e-12, epsrel=1e-12)
+        
+        
+        # result_uu, _ = integrate.dblquad(self.pv_integrand_uu, 1/(1-self.gamma), ub, lambda v1: 1, lambda v1: ub, epsabs=1e-12, epsrel=1e-12)
+        # result_um, _ = integrate.dblquad(self.pv_integrand_um, 1/(1-self.gamma), ub, lambda v1: (1-self.gamma)**2, lambda v1: 1, epsabs=1e-12, epsrel=1e-12)
+        # result_ud, _ = integrate.dblquad(self.pv_integrand_ud, 1/(1-self.gamma), ub, lambda v1: lb, lambda v1: (1-self.gamma)**2, epsabs=1e-12, epsrel=1e-12)
+        # result_mu, _ = integrate.dblquad(self.pv_integrand_mu, 1-self.gamma, 1/(1-self.gamma), lambda v1: 1/(v1*(1-self.gamma)), lambda v1: ub, epsabs=1e-12, epsrel=1e-12)
+        # result_mm, _ = integrate.dblquad(self.pv_integrand_mm, 1-self.gamma, 1/(1-self.gamma), lambda v1: (1-self.gamma)/v1, lambda v1: 1/(v1*(1-self.gamma)), epsabs=1e-12, epsrel=1e-12)
+        # result_md, _ = integrate.dblquad(self.pv_integrand_md, 1-self.gamma, 1/(1-self.gamma), lambda v1: lb, lambda v1: (1-self.gamma)/v1, epsabs=1e-12, epsrel=1e-12)
+        # result_du, _ = integrate.dblquad(self.pv_integrand_du, lb, 1-self.gamma, lambda v1: 1/(1-self.gamma)**2, lambda v1: ub, epsabs=1e-12, epsrel=1e-12)
+        # result_dm, _ = integrate.dblquad(self.pv_integrand_dm, lb, 1-self.gamma, lambda v1: 1, lambda v1: 1/(1-self.gamma)**2, epsabs=1e-12, epsrel=1e-12)
+        # result_dd, _ = integrate.dblquad(self.pv_integrand_dd, lb, 1-self.gamma, lambda v1: lb, lambda v1: 1, epsabs=1e-12, epsrel=1e-12)
         
         # assert all results are positive
         assert result_uu >= 0, f"pv_uu is negative: {result_uu}"
@@ -416,13 +442,11 @@ def process_gamma(args):
 if __name__ == "__main__":
     import pandas as pd
     from tqdm import tqdm
-    from multiprocessing import Pool, cpu_count, freeze_support
-    from functools import partial
+    from multiprocessing import Pool, cpu_count
+    import os
     
-    # This is required for Windows support
-    freeze_support()
-    
-    path = '/home/shiftpub/Dynamic_AMM/TwoStep/results'
+    path = '/Users/haofu/Desktop/AMM/Dynamic_AMM/CPMM/TwoStep/results'
+    os.makedirs(path, exist_ok=True)
     
     sigma_list = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
     gamma_list = np.arange(0.00001, 0.0005, 0.00001)
