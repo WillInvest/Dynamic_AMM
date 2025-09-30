@@ -7,15 +7,17 @@ class TwoStepIntegrate:
                  sigma: float, w: float,
                  pv: float = 2e6, L: float = 1e6, 
                  dt: float = 12/(365*24*60*60),
+                 theta: float = 0.5,
                  incoming_fee: bool = True):
         
         self.gamma = gamma
         self.sigma = sigma
+        self.theta = theta
         self.dt = dt
         self.incoming_fee = incoming_fee
-        self.y0 = (1-w) * pv
-        self.x0 = (L/((1-w)*pv)**(1-w))**(1/w)
-        self.p0 = (w/(1-w)) * self.y0 / self.x0
+        self.y0 = 1e6
+        self.x0 = 1e6
+        self.p0 = (w/(1-w)) * self.y0 / self.x0 * (1-self.gamma)**self.theta
         self.L = L
         self.eps = 1e-2
         self.w = w
@@ -447,8 +449,8 @@ class TwoStepIntegrate:
         return total_result
     
 def process_gamma(args):
-    s, g, w, inc = args
-    two_step_integrate = TwoStepIntegrate(gamma=g, sigma=s, w=w, incoming_fee=inc)
+    s, g, w, theta, inc = args
+    two_step_integrate = TwoStepIntegrate(gamma=g, sigma=s, w=w, theta=theta, incoming_fee=inc)
     first_step_fee_revenue = two_step_integrate.calculate_fee_revenue_single_step()
     first_step_pool_value = two_step_integrate.calculate_pool_value_single_step()
     second_step_fee_revenue = two_step_integrate.calculate_fee_revenue_second_step()
@@ -457,6 +459,7 @@ def process_gamma(args):
         "sigma": s,
         "gamma": g,
         "w": w,
+        "theta": theta,
         "incoming_fee": inc,
         "first_step_fee_revenue": first_step_fee_revenue,
         "first_step_pool_value": first_step_pool_value,
@@ -475,11 +478,17 @@ if __name__ == "__main__":
     
     sigma_list = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
     gamma_list = np.arange(0.00001, 0.0005, 0.00001)
-    w_list = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+    w_list = [0.5]
+    thetas = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
     inc_list = [True, False]
     
     # Create all combinations of sigma and gamma
-    args_list = [(sigma, gamma, w, inc) for sigma in sigma_list for gamma in gamma_list for w in w_list for inc in inc_list]
+    args_list = [(sigma, gamma, w, theta, inc) 
+                 for sigma in sigma_list 
+                 for gamma in gamma_list 
+                 for w in w_list 
+                 for theta in thetas 
+                 for inc in inc_list]
     
     # Use all available CPU cores
     num_cores = cpu_count()
