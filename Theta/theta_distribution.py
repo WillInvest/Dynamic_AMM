@@ -173,17 +173,9 @@ def iterate_stationary(
         M_raw = m_int_raw + mL_raw + mR_raw
 
         # Renormalize (helps kill numerical drift)
-        if renormalize == "global":
-            f_new  = f_raw / M_raw
-            mL_new = mL_raw / M_raw
-            mR_new = mR_raw / M_raw
-        elif renormalize == "interior":
-            target_int = max(0.0, 1.0 - (mL_raw + mR_raw))
-            scaling = target_int / m_int_raw if m_int_raw > 0 else 0.0
-            f_new = f_raw * scaling
-            mL_new, mR_new = mL_raw, mR_raw
-        else:
-            raise ValueError("renormalize must be 'global' or 'interior'")
+        f_new  = f_raw / M_raw
+        mL_new = mL_raw / M_raw
+        mR_new = mR_raw / M_raw
 
         # Clip tiny negatives due to roundoff
         f_new = np.maximum(f_new, 0.0)
@@ -232,7 +224,7 @@ def analytical_incoming_fee(theta, gamma, sigma, delta_t=1/(365*24)):
 
 def run(gamma, sigma):
     
-    dir = f"/Users/haofu/Desktop/AMM/Dynamic_AMM/Theta/results1/gamma_{gamma:.4f}_sigma_{sigma:.2f}"
+    dir = f"/Users/haofu/Desktop/AMM/Dynamic_AMM/Theta/results2/gamma_{gamma:.4f}_sigma_{sigma:.2f}"
     os.makedirs(dir, exist_ok=True)
     
     dt = 12/(365*24*60*60)  # 1-minute step during trading hours
@@ -249,20 +241,20 @@ def run(gamma, sigma):
     interior_mass = float(np.dot(res.w, res.f_nodes))
     total_mass = interior_mass + res.m_left + res.m_right
 
-    # interior probabilities at nodes
-    probs_interior = res.w * res.f_nodes
+    # # interior probabilities at nodes
+    # probs_interior = res.w * res.f_nodes
 
-    # add atoms
-    p_left = res.m_left
-    p_right = res.m_right
+    # # add atoms
+    # p_left = res.m_left
+    # p_right = res.m_right
 
-    # sanity check: should be 1
-    total_mass = probs_interior.sum() + p_left + p_right
+    # # sanity check: should be 1
+    # total_mass = probs_interior.sum() + p_left + p_right
 
     # normalize just in case of small numerical drift
-    probs_interior /= total_mass
-    p_left /= total_mass
-    p_right /= total_mass
+    probs_interior = (res.w * res.f_nodes) / total_mass
+    p_left = res.m_left / total_mass
+    p_right = res.m_right / total_mass
     
     plt.figure()
     plt.bar(res.x, probs_interior, width=0.02, label=r"$\theta$ $\in$ $(-1,1)$")
