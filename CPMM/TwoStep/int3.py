@@ -422,7 +422,7 @@ if __name__ == "__main__":
     
     sigma_list = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
     gamma_list = np.arange(0.00001, 0.0005, 0.00001)
-    theta_list = [-1, -0.5, 0, 0.5, 1]
+    theta_list = [-1]
     
     # Create all combinations of sigma and gamma
     args_list = [(sigma, gamma, theta) for sigma in sigma_list for gamma in gamma_list for theta in theta_list]
@@ -440,7 +440,7 @@ if __name__ == "__main__":
         ))
     
     result_df = pd.DataFrame(result_list)
-    result_df.to_csv(f"{path}/two_step_result_theta.csv", index=False)
+    result_df.to_csv(f"{path}/two_step_result_thetan1.csv", index=False)
     
         
         

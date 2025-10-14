@@ -94,6 +94,7 @@ class AMMSimulator:
         prices = np.tile(self.prices[:, :, :, np.newaxis], (1, 1, 1, len(self.gamma_values)))
         # print(f"prices shape: {prices.shape}")
         gammas = np.tile(self.gamma_values[np.newaxis, np.newaxis, np.newaxis, :], (self.num_seeds, len(self.mu_values), len(self.sigma_values), 1))
+        
         upper_threshold = (self.y_dis / self.x_dis) / (1-gammas)
         lower_threshold = (self.y_dis / self.x_dis) * (1-gammas)
         upper_mask = prices > upper_threshold
@@ -114,6 +115,18 @@ class AMMSimulator:
             (self.y_dis[lower_mask] - L[lower_mask]*np.sqrt(prices[lower_mask]/(1-gammas[lower_mask]))) # outgoing fees collected from delta_y
         self.x_dis[lower_mask] = L[lower_mask]*np.sqrt((1-gammas[lower_mask])/prices[lower_mask])
         self.y_dis[lower_mask] = L[lower_mask]*np.sqrt(prices[lower_mask]/(1-gammas[lower_mask]))
+     
+        # Calculate theta = -(ln(price) / ln(Pt)) where Pt = yt/xt (AMM mid price)
+        # Pt shape: (num_seeds, num_mu, num_sigma, num_gamma)
+        Pt = self.y_dis / self.x_dis
+        # Avoid division by zero and log of zero/negative values
+        valid_mask = (prices > 0) & (Pt > 0) & (Pt != 1)
+        theta = np.zeros_like(prices)
+        theta[valid_mask] = -(np.log(prices[valid_mask]/Pt[valid_mask]) / np.log(1-gammas[valid_mask]))
+        
+        # Store theta for this step (only store if we have a theta_history attribute)
+        if hasattr(self, 'theta_history'):
+            self.theta_history.append(theta.copy())
      
         if self.test_mode:
             if not np.all(self.dis_out_fees >= 0):
@@ -188,7 +201,7 @@ class AMMSimulator:
                 print(f"Invalid constant product values: {np.sqrt(self.x_rout[invalid_indices] * self.y_rout[invalid_indices]) - L_rout[invalid_indices]}")
                 raise AssertionError("Constant product is violated for the Rebalance upper case")
         
-    def simulate(self, output_dir):
+    def simulate(self, output_dir, update_both: bool = False):
         """
         Simulate the AMM for all seeds and sigma values
         """
@@ -197,11 +210,15 @@ class AMMSimulator:
         print(f"Range of gamma values: {max(self.gamma_values)} to {min(self.gamma_values)}")
         print(f"Simulation Starts...")
         
+        # Initialize theta storage - list to collect theta values at each step
+        self.theta_history = []
+        
         current_time = time.time()
         for _ in tqdm(range(self.steps), desc="Simulating Progress"):
             self.update_prices()
             self.update_distribute_case()
-            self.update_rebalance_case()
+            if update_both:
+                self.update_rebalance_case()
             
         print(f"Simulation Finished...")
         print(f"Time taken: {time.time() - current_time} seconds")
@@ -243,10 +260,62 @@ class AMMSimulator:
         results_df.write_parquet(parquet_path, compression='zstd')
     
         print(f"Results saved to {parquet_path}")
+        
+        # Save theta history separately
+        self.save_theta_history(output_dir)
     
         # Clear memory
         del results_df
         gc.collect()  
+        
+    def save_theta_history(self, output_dir):
+        """
+        Save theta history as a separate DataFrame with columns:
+        sigma, gamma, mu, seed_idx, step_idx, theta
+        """
+        if not hasattr(self, 'theta_history') or not self.theta_history:
+            print("No theta history to save")
+            return
+            
+        print("Saving theta history...")
+        
+        # Convert list of theta arrays to a single stacked array
+        # theta_history is a list of arrays with shape (num_seeds, num_mu, num_sigma, num_gamma)
+        # Stack to get shape: (steps, num_seeds, num_mu, num_sigma, num_gamma)
+        theta_array = np.stack(self.theta_history, axis=0)
+        
+        # Create index arrays for all dimensions
+        steps, num_seeds, num_mu, num_sigma, num_gamma = theta_array.shape
+        
+        # Create flattened index arrays
+        step_indices = np.repeat(np.arange(steps), num_seeds * num_mu * num_sigma * num_gamma)
+        seed_indices = np.tile(np.repeat(np.arange(num_seeds), num_mu * num_sigma * num_gamma), steps)
+        mu_indices = np.tile(np.repeat(np.arange(num_mu), num_sigma * num_gamma), steps * num_seeds)
+        sigma_indices = np.tile(np.repeat(np.arange(num_sigma), num_gamma), steps * num_seeds * num_mu)
+        gamma_indices = np.tile(np.arange(num_gamma), steps * num_seeds * num_mu * num_sigma)
+        
+        # Flatten theta array
+        theta_flat = theta_array.reshape(-1)
+        
+        # Create DataFrame
+        theta_df = pl.DataFrame({
+            'step_idx': step_indices,
+            'seed_idx': seed_indices,
+            'mu': self.mu_values[mu_indices],
+            'sigma': self.sigma_values[sigma_indices],
+            'gamma': self.gamma_values[gamma_indices],
+            'theta': theta_flat
+        })
+        
+        # Save to parquet file
+        theta_parquet_path = f"{output_dir}/theta_history_steps_{self.steps}.parquet"
+        theta_df.write_parquet(theta_parquet_path, compression='zstd')
+        
+        print(f"Theta history saved to {theta_parquet_path}")
+        
+        # Clear memory
+        del theta_df, theta_array
+        gc.collect()
         
     def simulate_full_history(self, output_dir):
         """
@@ -276,6 +345,10 @@ class AMMSimulator:
         history_aDO = np.zeros((self.steps + 1, self.num_seeds, len(self.mu_values), len(self.sigma_values), len(self.gamma_values)))
         history_aRI = np.zeros((self.steps + 1, self.num_seeds, len(self.mu_values), len(self.sigma_values), len(self.gamma_values)))
         history_aRO = np.zeros((self.steps + 1, self.num_seeds, len(self.mu_values), len(self.sigma_values), len(self.gamma_values)))
+        
+        # Initialize theta storage for step-by-step recording
+        self.theta_history = []
+        
         gammas = np.tile(self.gamma_values[np.newaxis, np.newaxis, np.newaxis, :], (self.num_seeds, len(self.mu_values), len(self.sigma_values), 1))
         # Store initial values
         initial_values = self.x * self.s0 + self.y
@@ -390,6 +463,9 @@ class AMMSimulator:
         results_df.write_parquet(parquet_path, compression='zstd')
     
         print(f"Results saved to {parquet_path}")
+        
+        # Save theta history separately
+        self.save_theta_history(output_dir)
     
         # Clear memory
         del results_df
@@ -399,20 +475,27 @@ if __name__ == "__main__":
     
     # Generate timestamp for unique filename
     timestamp = time.strftime("%Y%m%d_%H%M%S")
-    output_dir = f'/home/shiftpub/Dynamic_AMM/inf_step_exp/mc_approach/crazy_simulation_results/{timestamp}'
+    output_dir = f'/home/shiftpub/Dynamic_AMM/CPMM/inf_step_exp/mc_approach/simulation_results/{timestamp}'
     os.makedirs(output_dir, exist_ok=True)
     x = 100; y = 100
-    num_seeds = 1
-    gamma_values = np.array([0.003])
-    sigma_values = np.array([0.1])
-    mu_values = np.array([-1])
-    steps_values = np.array([100])
+    num_seeds = 1000
+    gamma_values = np.array([0.003, 0.005, 0.01, 0.02, 0.03, 0.05, 0.1, 0.2, 0.3])
+    sigma_values = np.array([0.1, 0.3, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5])
+    mu_values = np.array([0])
+    steps_values = np.array([1000])
 
     # steps_values = np.array([5, 10, 20, 50, 100, 500, 1000, 5000, 10000])
     dt = 1/(365*24)
     for steps in steps_values:
-        simulator = AMMSimulator(x=x, y=y, num_seeds=num_seeds, gamma_values=gamma_values, sigma_values=sigma_values, mu_values=mu_values, steps=steps, dt=dt)
-        simulator.simulate_full_history(output_dir)
+        
+        simulator = AMMSimulator(x=x, y=y,
+                                 num_seeds=num_seeds,
+                                 gamma_values=gamma_values,
+                                 sigma_values=sigma_values,
+                                 mu_values=mu_values,
+                                 steps=steps, dt=dt)
+        
+        simulator.simulate(output_dir)
 
 
     

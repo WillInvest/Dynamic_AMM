@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ammChart>
+  <metadata>
+    <title>AMM No-Arbitrage Window</title>
+    <xAxis>Time</xAxis>
+    <yAxis>Price</yAxis>
+    <description>Automated Market Maker pricing model showing the no-arbitrage window between bid and ask prices</description>
+  </metadata>
+  
+  <priceLines>
+    <!-- AMM Ask Price Line -->
+    <line id="ammAsk" type="horizontal" style="dashed">
+      <name>AMM Ask Price</name>
+      <formula>1/(1-γ) * P_t</formula>
+      <color>#FF0000</color>
+      <position>upper</position>
+      <label>
+        <text>AMM Ask Price</text>
+        <formula>$\frac{1}{1-\gamma}P_t$</formula>
+        <position>left</position>
+      </label>
+    </line>
+    
+    <!-- Fair Price Line -->
+    <line id="fairPrice" type="horizontal" style="dotted">
+      <name>Fair Price</name>
+      <formula>P_t = y_t/x_t</formula>
+      <color>#000000</color>
+      <position>middle</position>
+      <label>
+        <text>P_t = y_t/x_t</text>
+        <position>left</position>
+      </label>
+    </line>
+    
+    <!-- AMM Bid Price Line -->
+    <line id="ammBid" type="horizontal" style="dashed">
+      <name>AMM Bid Price</name>
+      <formula>(1-γ)P_t</formula>
+      <color>#0000FF</color>
+      <position>lower</position>
+      <label>
+        <text>AMM Bid Price</text>
+        <formula>$(1-\gamma)P_t$</formula>
+        <position>left</position>
+      </label>
+    </line>
+  </priceLines>
+  
+  <noArbitrageWindow>
+    <region>
+      <name>No-Arbitrage Window</name>
+      <upperBound>1/(1-γ) * P_t</upperBound>
+      <lowerBound>(1-γ)P_t</lowerBound>
+      <fillColor>rgba(128, 128, 128, 0.1)</fillColor>
+      <label>
+        <text>No-Arbitrage Window</text>
+        <position>right</position>
+        <brace>true</brace>
+      </label>
+    </region>
+  </noArbitrageWindow>
+  
+  <parameters>
+    <parameter name="gamma" symbol="γ" description="Fee parameter">
+      <value>0.003</value>
+      <range min="0" max="1"/>
+    </parameter>
+    <parameter name="P_t" symbol="P_t" description="Fair price at time t">
+      <formula>y_t/x_t</formula>
+    </parameter>
+    <parameter name="y_t" symbol="y_t" description="Token Y reserves at time t"/>
+    <parameter name="x_t" symbol="x_t" description="Token X reserves at time t"/>
+  </parameters>
+  
+  <plotSettings>
+    <axes>
+      <xAxis>
+        <min>0</min>
+        <max>10</max>
+        <label>Time</label>
+        <showGrid>true</showGrid>
+      </xAxis>
+      <yAxis>
+        <min>0</min>
+        <max>5</max>
+        <label>Price</label>
+        <showGrid>true</showGrid>
+        <arrow>true</arrow>
+      </yAxis>
+    </axes>
+    <background>
+      <color>#FFFFFF</color>
+    </background>
+    <margins>
+      <top>50</top>
+      <right>100</right>
+      <bottom>50</bottom>
+      <left>80</left>
+    </margins>
+  </plotSettings>
+  
+  <annotations>
+    <annotation type="title">
+      <text>AMM No-Arbitrage Window</text>
+      <position>
+        <x>center</x>
+        <y>top</y>
+      </position>
+      <style>
+        <fontSize>18</fontSize>
+        <fontWeight>bold</fontWeight>
+      </style>
+    </annotation>
+    
+    <annotation type="formula" id="askFormula">
+      <text>1/(1-γ) P_t</text>
+      <position>
+        <x>right</x>
+        <y>upper</y>
+      </position>
+      <color>#FF0000</color>
+    </annotation>
+    
+    <annotation type="formula" id="bidFormula">
+      <text>(1-γ)P_t</text>
+      <position>
+        <x>right</x>
+        <y>lower</y>
+      </position>
+      <color>#0000FF</color>
+    </annotation>
+  </annotations>
+</ammChart>

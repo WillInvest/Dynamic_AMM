@@ -123,11 +123,11 @@ def fee_in_optimization(params):
         return -fee_out(gamma)
     
     # Method 1: Direct optimization of Fee_in
-    result_in = optimize.minimize_scalar(objective_in, bounds=(1e-5, 0.0005), method='bounded', options={'xatol': 1e-120})
+    result_in = optimize.minimize_scalar(objective_in, bounds=(1e-5, 0.995), method='bounded', options={'xatol': 1e-120})
     gamma_opt_in = result_in.x
     max_fee_in = -result_in.fun
     
-    result_out = optimize.minimize_scalar(objective_out, bounds=(1e-5, 0.0005), method='bounded', options={'xatol': 1e-120})
+    result_out = optimize.minimize_scalar(objective_out, bounds=(1e-5, 0.995), method='bounded', options={'xatol': 1e-120})
     gamma_opt_out = result_out.x
     max_fee_out = -result_out.fun
     
@@ -145,12 +145,12 @@ if __name__ == "__main__":
     from tqdm import tqdm
     results_df = []
     # Define parameter ranges to test
-    sigma_values = np.round(np.arange(0.101, 1.1, 0.001), 4)
+    sigma_values = np.round(np.arange(0.03, 1.001, 0.001), 3)
     base_params = {
         'X_t': 1e6,
         'Y_t': 1e6,
         'S_t': 1,    # Current price
-        'delta_t': 12/365/24/60/60,  # Time interval
+        'delta_t': 1,  # Time interval
         'L': 1e6,       # Liquidity parameter
         'P_t': 1     # Target price
     }
@@ -175,12 +175,11 @@ if __name__ == "__main__":
     
     # Save results to CSV
     results_df = pd.DataFrame(results_df)
-    results_df.to_csv('fee_optimization_results.csv', index=False)
-    print("Results saved to 'fee_optimization_results.csv'")
+    results_df.to_csv('fee_optimization_results_one_year.csv', index=False)
+    print("Results saved to 'fee_optimization_results_one_year.csv'")
     
     # Create the dual y-axis plot
-    fig, ax1 = plt.subplots(figsize=(12, 6))
-    
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 6), sharex=True)
     # Plot optimal gamma on left y-axis
     ax1.plot(results_df['sigma'], results_df['opt_gamma_in'], color='blue', label='Optimal Fee In')
     ax1.plot(results_df['sigma'], results_df['opt_gamma_out'], color='green', label='Optimal Fee Out')
@@ -188,15 +187,15 @@ if __name__ == "__main__":
     ax1.set_ylabel('Optimal Fee (γ)', color='blue')
     ax1.tick_params(axis='y', labelcolor='blue')
     ax1.legend(loc='upper left')
+    
     # Create second y-axis for fee
-    # ax2 = ax1.twinx()
-    # ax2.plot(results_df['sigma'], results_df['opt_fee_in'], color='red', label='Fee Revenue In')
-    # ax2.plot(results_df['sigma'], results_df['opt_fee_out'], color='orange', label='Fee Revenue Out')
-    # ax2.set_ylabel('Fee Revenue', color='red')
-    # ax2.tick_params(axis='y', labelcolor='red')
+    ax2.plot(results_df['sigma'], results_df['opt_fee_in'], color='red', label='Fee Revenue In')
+    ax2.plot(results_df['sigma'], results_df['opt_fee_out'], color='orange', label='Fee Revenue Out')
+    ax2.set_ylabel('Fee Revenue', color='red')
+    ax2.tick_params(axis='y', labelcolor='red')
     
     # Add title and legend
-    plt.title('Optimal Gamma and Fee Revenue vs Sigma')
+    # plt.title('Optimal Gamma and Fee Revenue vs Sigma')
     
     # Add legend
     # lines1, labels1 = ax1.get_legend_handles_labels()
@@ -205,6 +204,7 @@ if __name__ == "__main__":
     
     # Add grid
     ax1.grid(True, alpha=0.3)
+    ax2.grid(True, alpha=0.3)
     
     # Save the plot
     plt.savefig('gamma_fee_plot.png', dpi=300, bbox_inches='tight')
