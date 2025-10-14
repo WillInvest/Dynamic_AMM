@@ -3,14 +3,15 @@ from scipy.stats import lognorm
 from scipy import integrate
 
 class TwoStepIntegrate:
-    def __init__(self, gamma: float, sigma: float, dt: float = 12/(365*24*60*60), incoming_fee: bool = True):
+    def __init__(self, gamma: float, sigma: float, dt: float = 12/(365*24*60*60), incoming_fee: bool = True, theta: float = 0.5):
         self.gamma = gamma
         self.sigma = sigma
         self.dt = dt
+        self.theta = theta
         self.incoming_fee = incoming_fee
         self.y0 = 1e6
         self.x0 = 1e6
-        self.p0 = self.y0 / self.x0
+        self.p0 = (self.y0 / self.x0) * (1-self.gamma)**self.theta
         self.L = np.sqrt(self.y0 * self.x0)
         self.eps = 1e-2
         
@@ -424,8 +425,8 @@ class TwoStepIntegrate:
         return total_result
     
 def process_gamma(args):
-    sigma, gamma = args
-    two_step_integrate = TwoStepIntegrate(gamma, sigma)
+    sigma, gamma, theta = args
+    two_step_integrate = TwoStepIntegrate(gamma=gamma, sigma=sigma, theta=theta)
     first_step_fee_revenue = two_step_integrate.calculate_fee_revenue_single_step()
     first_step_pool_value = two_step_integrate.calculate_pool_value_single_step()
     second_step_fee_revenue = two_step_integrate.calculate_fee_revenue_second_step()
@@ -433,6 +434,7 @@ def process_gamma(args):
     return {
         "sigma": sigma,
         "gamma": gamma,
+        "theta": theta,
         "first_step_fee_revenue": first_step_fee_revenue,
         "first_step_pool_value": first_step_pool_value,
         "second_step_fee_revenue": second_step_fee_revenue,
@@ -450,9 +452,10 @@ if __name__ == "__main__":
     
     sigma_list = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
     gamma_list = np.arange(0.00001, 0.0005, 0.00001)
+    theta_list = [-1, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1]
     
     # Create all combinations of sigma and gamma
-    args_list = [(sigma, gamma) for sigma in sigma_list for gamma in gamma_list]
+    args_list = [(sigma, gamma, theta) for sigma in sigma_list for gamma in gamma_list for theta in theta_list]
     
     # Use all available CPU cores
     num_cores = cpu_count()
@@ -467,7 +470,7 @@ if __name__ == "__main__":
         ))
     
     result_df = pd.DataFrame(result_list)
-    result_df.to_csv(f"{path}/two_step_result.csv", index=False)
+    result_df.to_csv(f"{path}/two_step_result_theta_comparison.csv", index=False)
     
         
         
