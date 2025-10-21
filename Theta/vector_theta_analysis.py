@@ -149,6 +149,34 @@ class AMMStationaryDistributionFast:
             + np.exp(mu * dt) * p0 * x * norm.cdf(-d2 + sig_sqrt_dt / 2.0)
             + y * norm.cdf(d1 + sig_sqrt_dt / 2.0)
         )
+        
+    def _analytical_pool_value(self, theta):
+        L, x, mu, delta_t, sigma, gamma = self.L, self.x, self.mu, self.dt, self.sigma, self.gamma
+        y = L**2 / x
+        p0 = (y/x) * np.power(1.0 - gamma, -theta)
+        initial_wealth = x * p0 + y # initial external wealth
+        sigma_sqrt_dt = sigma * np.sqrt(delta_t)
+        lambda_1 = y / ((1 - gamma) * p0 * x)
+        lambda_2 = (1 - gamma) * y / (p0 * x)
+    
+        # Calculate D terms
+        D1 = (1 / sigma_sqrt_dt) * np.log(lambda_1) 
+        D2 = (1 / sigma_sqrt_dt) * np.log(lambda_2) 
+        D1_plus = (1 / sigma_sqrt_dt) * (np.log(lambda_1) + 0.5 * sigma**2 * delta_t)
+        D1_minus = (1 / sigma_sqrt_dt) * (np.log(lambda_1) - 0.5 * sigma**2 * delta_t)
+        D2_plus = (1 / sigma_sqrt_dt) * (np.log(lambda_2) + 0.5 * sigma**2 * delta_t)
+        D2_minus = (1 / sigma_sqrt_dt) * (np.log(lambda_2) - 0.5 * sigma**2 * delta_t)
+    
+        beta = L * (2-gamma) * np.sqrt(p0/(1-gamma)) * np.exp(-sigma**2/8 * delta_t)
+    
+        first_term = beta * (norm.cdf(-D1) + norm.cdf(D2))
+        second_term = y * (norm.cdf(D1_plus) - norm.cdf(D2_plus)) + \
+            x * p0 * (norm.cdf(D1_minus) - norm.cdf(D2_minus))
+        terminal_wealth = first_term + second_term
+        profit = terminal_wealth - initial_wealth
+        return terminal_wealth, profit
+    
+    
 
     def collect_results(self):
         # theta list (interiors + boundaries)
@@ -157,11 +185,13 @@ class AMMStationaryDistributionFast:
 
         inc = self._incoming_fee_vec(theta_list)
         out = self._outgoing_fee_vec(theta_list)
+        
+        terminal_wealth, profit = self._analytical_pool_value(theta_list)
 
         # (Optional) small renorm for safety
         pi = pi / pi.sum()
 
-        return float(pi @ inc), float(pi @ out)
+        return float(pi @ inc), float(pi @ out), float(pi @ terminal_wealth), float(pi @ profit)
 
 # ---------- Batch evaluation (parallel) ----------
 def sweep_grid(gamma_list, sigma_list, mu, dt, N=500, n_jobs=-1):
@@ -173,8 +203,8 @@ def sweep_grid(gamma_list, sigma_list, mu, dt, N=500, n_jobs=-1):
 
     def run_one(g, s):
         mdl = AMMStationaryDistributionFast(g, mu, s, dt, bins, bin_centers)
-        inc, out = mdl.collect_results()
-        return g, s, inc, out
+        inc, out, terminal_wealth, profit = mdl.collect_results()
+        return g, s, inc, out, terminal_wealth, profit
 
     out = Parallel(n_jobs=n_jobs, backend="loky", verbose=10)(
         delayed(run_one)(g, s) for g, s in tasks
@@ -182,20 +212,23 @@ def sweep_grid(gamma_list, sigma_list, mu, dt, N=500, n_jobs=-1):
     # to DataFrame without importing pandas here:
     return np.array(out, dtype=[("gamma", "f8"), ("sigma", "f8"),
                                 ("expected_incoming_fee", "f8"),
-                                ("expected_outgoing_fee", "f8")])
+                                ("expected_outgoing_fee", "f8"),
+                                ("terminal_wealth", "f8"),
+                                ("profit", "f8")])
     
     
 if __name__ == "__main__":
     import numpy as np
     import pandas as pd
-
+    from datetime import datetime
     N   = 500
     mu  = 0.0
     dt  = 12.0 / (365*24*60*60)
 
-    gamma_list = np.arange(0.0001, 0.0501, 0.0001)  
+    gamma_list = np.arange(0.001, 0.201, 0.001)  
     sigma_list = np.arange(0.1, 2.1, 0.1)
 
     rec = sweep_grid(gamma_list, sigma_list, mu, dt, N=N, n_jobs=-1)
     df = pd.DataFrame(rec)
-    df.to_csv("vector_theta_analysis_results.csv", index=False)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    df.to_csv(f"vector_theta_analysis_results_large_gamma_{timestamp}.csv", index=False)
