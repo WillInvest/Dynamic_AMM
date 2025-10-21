@@ -190,8 +190,13 @@ class AMMStationaryDistributionFast:
 
         # (Optional) small renorm for safety
         pi = pi / pi.sum()
+        
+        theta_mid = 0
+        inc_mid = self._incoming_fee_vec(theta_mid)
+        out_mid = self._outgoing_fee_vec(theta_mid)
+        terminal_wealth_mid, profit_mid = self._analytical_pool_value(theta_mid)
 
-        return float(pi @ inc), float(pi @ out), float(pi @ terminal_wealth), float(pi @ profit)
+        return float(pi @ inc), float(pi @ out), float(pi @ terminal_wealth), float(pi @ profit), inc_mid, out_mid, terminal_wealth_mid, profit_mid
 
 # ---------- Batch evaluation (parallel) ----------
 def sweep_grid(gamma_list, sigma_list, mu, dt, N=500, n_jobs=-1):
@@ -203,8 +208,8 @@ def sweep_grid(gamma_list, sigma_list, mu, dt, N=500, n_jobs=-1):
 
     def run_one(g, s):
         mdl = AMMStationaryDistributionFast(g, mu, s, dt, bins, bin_centers)
-        inc, out, terminal_wealth, profit = mdl.collect_results()
-        return g, s, inc, out, terminal_wealth, profit
+        inc, out, terminal_wealth, profit, inc_mid, out_mid, terminal_wealth_mid, profit_mid = mdl.collect_results()
+        return g, s, inc, out, terminal_wealth, profit, inc_mid, out_mid, terminal_wealth_mid, profit_mid
 
     out = Parallel(n_jobs=n_jobs, backend="loky", verbose=10)(
         delayed(run_one)(g, s) for g, s in tasks
@@ -214,7 +219,11 @@ def sweep_grid(gamma_list, sigma_list, mu, dt, N=500, n_jobs=-1):
                                 ("expected_incoming_fee", "f8"),
                                 ("expected_outgoing_fee", "f8"),
                                 ("terminal_wealth", "f8"),
-                                ("profit", "f8")])
+                                ("profit", "f8"),
+                                ("incoming_fee_mid", "f8"),
+                                ("outgoing_fee_mid", "f8"),
+                                ("terminal_wealth_mid", "f8"),
+                                ("profit_mid", "f8")])
     
     
 if __name__ == "__main__":
