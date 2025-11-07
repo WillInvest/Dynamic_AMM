@@ -184,60 +184,97 @@ class AMMStationaryDistributionFast:
         pi         = self.pi_star
 
         inc = self._incoming_fee_vec(theta_list)
-        out = self._outgoing_fee_vec(theta_list)
+        # out = self._outgoing_fee_vec(theta_list)
         
-        terminal_wealth, profit = self._analytical_pool_value(theta_list)
+        # terminal_wealth, profit = self._analytical_pool_value(theta_list)
 
         # (Optional) small renorm for safety
         pi = pi / pi.sum()
         
-        theta_mid = 0
-        inc_mid = self._incoming_fee_vec(theta_mid)
-        out_mid = self._outgoing_fee_vec(theta_mid)
-        terminal_wealth_mid, profit_mid = self._analytical_pool_value(theta_mid)
+        # theta_mid = 0
+        # inc_mid = self._incoming_fee_vec(theta_mid)
+        # out_mid = self._outgoing_fee_vec(theta_mid)
+        # terminal_wealth_mid, profit_mid = self._analytical_pool_value(theta_mid)
 
-        return float(pi @ inc), float(pi @ out), float(pi @ terminal_wealth), float(pi @ profit), inc_mid, out_mid, terminal_wealth_mid, profit_mid
+        return float(pi @ inc)#, float(pi @ out), float(pi @ terminal_wealth), float(pi @ profit), inc_mid, out_mid, terminal_wealth_mid, profit_mid
+
+    # def collect_results_total(self):
+    #     # theta list (interiors + boundaries)
+    #     theta_list = np.concatenate([self.bin_centers, [-1.0, 1.0]])
+    #     pi         = self.pi_star
+
+    #     inc = self._incoming_fee_vec(theta_list)
+    #     out = self._outgoing_fee_vec(theta_list)
+            
+    #     terminal_wealth, profit = self._analytical_pool_value(theta_list)
+        
+    #     total_in = inc + profit
+    #     total_out = out + profit
+
+    #     # (Optional) small renorm for safety
+    #     pi = pi / pi.sum()
+
+    #     return float(pi @ total_in), float(pi @ total_out)
+
+# def sweep_grid_total(gamma_list, sigma_list, mu, dt, N=500, n_jobs=-1):
+#     bins = np.linspace(-1.0, 1.0, N)           # N edges → N-1 interior
+#     bin_centers = 0.5 * (bins[:-1] + bins[1:])
+
+#     # make Cartesian product once
+#     tasks = [(g, s) for g in gamma_list for s in sigma_list]
+
+#     def run_one(g, s):
+#         mdl = AMMStationaryDistributionFast(g, mu, s, dt, bins, bin_centers)
+#         total_in, total_out = mdl.collect_results_total()
+#         return g, s, total_in, total_out
+
+#     out = Parallel(n_jobs=n_jobs, backend="loky", verbose=10)(
+#         delayed(run_one)(g, s) for g, s in tasks
+#     )
+#     return np.array(out, dtype=[("gamma", "f8"), ("sigma", "f8"),
+#                                 ("total_incoming_fee", "f8"),
+#                                 ("total_outgoing_fee", "f8")])
 
 # ---------- Batch evaluation (parallel) ----------
-def sweep_grid(gamma_list, sigma_list, mu, dt, N=500, n_jobs=-1):
-    bins = np.linspace(-1.0, 1.0, N)           # N edges → N-1 interior
-    bin_centers = 0.5 * (bins[:-1] + bins[1:])
+# def sweep_grid(gamma_list, sigma_list, mu, dt, N=500, n_jobs=-1):
+#     bins = np.linspace(-1.0, 1.0, N)           # N edges → N-1 interior
+#     bin_centers = 0.5 * (bins[:-1] + bins[1:])
 
-    # make Cartesian product once
-    tasks = [(g, s) for g in gamma_list for s in sigma_list]
+#     # make Cartesian product once
+#     tasks = [(g, s) for g in gamma_list for s in sigma_list]
 
-    def run_one(g, s):
-        mdl = AMMStationaryDistributionFast(g, mu, s, dt, bins, bin_centers)
-        inc, out, terminal_wealth, profit, inc_mid, out_mid, terminal_wealth_mid, profit_mid = mdl.collect_results()
-        return g, s, inc, out, terminal_wealth, profit, inc_mid, out_mid, terminal_wealth_mid, profit_mid
+#     def run_one(g, s):
+#         mdl = AMMStationaryDistributionFast(g, mu, s, dt, bins, bin_centers)
+#         inc, out, terminal_wealth, profit, inc_mid, out_mid, terminal_wealth_mid, profit_mid = mdl.collect_results()
+#         return g, s, inc, out, terminal_wealth, profit, inc_mid, out_mid, terminal_wealth_mid, profit_mid
 
-    out = Parallel(n_jobs=n_jobs, backend="loky", verbose=10)(
-        delayed(run_one)(g, s) for g, s in tasks
-    )
-    # to DataFrame without importing pandas here:
-    return np.array(out, dtype=[("gamma", "f8"), ("sigma", "f8"),
-                                ("expected_incoming_fee", "f8"),
-                                ("expected_outgoing_fee", "f8"),
-                                ("terminal_wealth", "f8"),
-                                ("profit", "f8"),
-                                ("incoming_fee_mid", "f8"),
-                                ("outgoing_fee_mid", "f8"),
-                                ("terminal_wealth_mid", "f8"),
-                                ("profit_mid", "f8")])
+#     out = Parallel(n_jobs=n_jobs, backend="loky", verbose=10)(
+#         delayed(run_one)(g, s) for g, s in tasks
+#     )
+#     # to DataFrame without importing pandas here:
+#     return np.array(out, dtype=[("gamma", "f8"), ("sigma", "f8"),
+#                                 ("expected_incoming_fee", "f8"),
+#                                 ("expected_outgoing_fee", "f8"),
+#                                 ("terminal_wealth", "f8"),
+#                                 ("profit", "f8"),
+#                                 ("incoming_fee_mid", "f8"),
+#                                 ("outgoing_fee_mid", "f8"),
+#                                 ("terminal_wealth_mid", "f8"),
+#                                 ("profit_mid", "f8")])
     
     
-if __name__ == "__main__":
-    import numpy as np
-    import pandas as pd
-    from datetime import datetime
-    N   = 500
-    mu  = 0.0
-    dt  = 12.0 / (365*24*60*60)
+# if __name__ == "__main__":
+#     import numpy as np
+#     import pandas as pd
+#     from datetime import datetime
+#     N   = 500
+#     mu  = 0.0
+#     dt  = 12.0 / (365*24*60*60)
 
-    gamma_list = np.arange(0.001, 0.201, 0.001)  
-    sigma_list = np.arange(0.1, 2.1, 0.1)
+#     gamma_list = np.arange(0.0001, 0.0201, 0.0001)  
+#     sigma_list = np.arange(0.1, 2.1, 0.1)
 
-    rec = sweep_grid(gamma_list, sigma_list, mu, dt, N=N, n_jobs=-1)
-    df = pd.DataFrame(rec)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    df.to_csv(f"vector_theta_analysis_results_large_gamma_{timestamp}.csv", index=False)
+#     rec = sweep_grid_total(gamma_list, sigma_list, mu, dt, N=N, n_jobs=-1)
+#     df = pd.DataFrame(rec)
+#     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+#     df.to_csv(f"vector_theta_analysis_results_total_large_gamma_{timestamp}.csv", index=False)
